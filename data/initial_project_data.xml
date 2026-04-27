@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Create the initial Charity Work parent project on install.
+            Uses the current lodge year.
+        -->
+        <function model="project.project" name="create_charity_parent_project"/>
+    </data>
+</odoo>

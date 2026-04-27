@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add charity-tagging section to the Attendance form, READ-ONLY
+         on existing fields (check_in / check_out / worked_hours stay
+         untouched).  Only the new x_* fields are editable. -->
+    <record id="view_attendance_form_elkscharity" model="ir.ui.view">
+        <field name="name">hr.attendance.form.elkscharity</field>
+        <field name="model">hr.attendance</field>
+        <field name="inherit_id" ref="hr_attendance.hr_attendance_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Tag as Charity / Volunteer Time">
+                    <group>
+                        <field name="x_charity_task_id"
+                               options="{'no_create': True}"/>
+                        <field name="x_charity_category_id" readonly="1"
+                               invisible="not x_charity_task_id"/>
+                        <field name="x_charity_hours"
+                               invisible="not x_charity_task_id"
+                               widget="float_time"/>
+                        <field name="x_is_helper"
+                               invisible="not x_charity_task_id"/>
+                        <field name="x_miles"
+                               invisible="not x_charity_task_id"/>
+                    </group>
+                    <group invisible="not x_charity_task_id">
+                        <field name="x_cash_value"/>
+                        <field name="x_non_cash_value"/>
+                        <field name="x_currency_id" invisible="1"/>
+                        <field name="x_validated" readonly="1"/>
+                        <field name="x_validated_by" readonly="1"
+                               invisible="not x_validated"/>
+                        <field name="x_validated_on" readonly="1"
+                               invisible="not x_validated"/>
+                    </group>
+                </group>
+                <group invisible="not x_charity_task_id">
+                    <field name="x_charity_notes"
+                           placeholder="Notes for the Secretary..."/>
+                </group>
+                <!-- Validation is handled by the Secretary from their dashboard -->
+
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Hide overtime / extra-hours UI — not used by the Lodge -->
+    <record id="view_attendance_form_hide_overtime" model="ir.ui.view">
+        <field name="name">hr.attendance.form.hide.overtime</field>
+        <field name="model">hr.attendance</field>
+        <field name="inherit_id" ref="hr_attendance.hr_attendance_view_form"/>
+        <field name="arch" type="xml">
+            <!-- Overtime statusbar in header -->
+            <xpath expr="//field[@name='overtime_status']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- "Extra Hours" field -->
+            <xpath expr="//field[@name='overtime_hours']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- Validated overtime label + div with approve/refuse buttons -->
+            <xpath expr="//label[@for='validated_overtime_hours']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//label[@for='validated_overtime_hours']" position="after">
+                <!-- The div immediately after the label contains the field + buttons -->
+            </xpath>
+            <xpath expr="//field[@name='validated_overtime_hours']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- Hide approve/refuse overtime buttons -->
+            <xpath expr="//button[@name='action_approve_overtime']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_refuse_overtime']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- Hide the entire Overtime Details notebook/tab -->
+            <xpath expr="//notebook" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add charity columns + hide overtime from attendance list -->
+    <record id="view_attendance_tree_elkscharity" model="ir.ui.view">
+        <field name="name">hr.attendance.tree.elkscharity</field>
+        <field name="model">hr.attendance</field>
+        <field name="inherit_id" ref="hr_attendance.view_attendance_tree"/>
+        <field name="arch" type="xml">
+            <!-- Hide overtime / extra-hours columns -->
+            <xpath expr="//list/field[@name='overtime_hours']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='validated_overtime_hours']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='overtime_status']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+            <!-- Hide overtime header buttons -->
+            <xpath expr="//list/header/button[@name='action_approve_overtime']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//list/header/button[@name='action_refuse_overtime']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- Add charity columns after worked_hours -->
+            <xpath expr="//list/field[@name='worked_hours']" position="after">
+                <field name="x_charity_task_id" string="Charity Activity"
+                       optional="show"/>
+                <field name="x_validated" string="Validated for GL Report"
+                       optional="show" readonly="1"/>
+                <field name="x_charity_category_id" optional="hide"/>
+                <field name="x_is_helper" optional="hide"/>
+                <field name="x_miles" optional="hide"/>
+                <field name="x_cash_value" optional="hide"/>
+                <field name="x_non_cash_value" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Action: Charity-tagged attendance awaiting validation -->
+    <record id="action_validate_charity_attendance" model="ir.actions.act_window">
+        <field name="name">Charity Attendance to Validate</field>
+        <field name="res_model">hr.attendance</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('x_is_charity_attendance', '=', True),
+            ('x_validated', '=', False),
+        ]</field>
+    </record>
+
+    <!-- Bulk validation server action -->
+    <record id="action_bulk_validate_charity_attendance" model="ir.actions.server">
+        <field name="name">Validate Charity Attendance</field>
+        <field name="model_id" ref="hr_attendance.model_hr_attendance"/>
+        <field name="binding_model_id" ref="hr_attendance.model_hr_attendance"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+records.filtered(lambda a: a.x_is_charity_attendance and not a.x_validated).action_validate_charity_attendance()
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Charity Attendance Validated',
+        'message': '%d record(s) processed.' % len(records),
+        'type': 'success',
+    },
+}
+        </field>
+    </record>
+</odoo>

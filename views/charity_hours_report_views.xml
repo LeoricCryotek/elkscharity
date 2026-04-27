@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Unified Charity Hours list view -->
+    <record id="view_charity_hours_report_tree" model="ir.ui.view">
+        <field name="name">elks.charity.hours.report.tree</field>
+        <field name="model">elks.charity.hours.report</field>
+        <field name="arch" type="xml">
+            <list string="Charity Hours" create="false"
+                  edit="false" delete="false">
+                <field name="date"/>
+                <field name="employee_id"/>
+                <field name="project_id"/>
+                <field name="task_id"/>
+                <field name="charity_category_id"/>
+                <field name="description" optional="hide"/>
+                <field name="hours" widget="float_time" sum="Total"/>
+                <field name="is_helper" optional="hide"/>
+                <field name="miles" sum="Total" optional="hide"/>
+                <field name="cash_value" sum="Total" optional="hide"/>
+                <field name="non_cash_value" sum="Total" optional="hide"/>
+                <field name="source" optional="show"/>
+                <field name="validated" widget="boolean"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search view -->
+    <record id="view_charity_hours_report_search" model="ir.ui.view">
+        <field name="name">elks.charity.hours.report.search</field>
+        <field name="model">elks.charity.hours.report</field>
+        <field name="arch" type="xml">
+            <search string="Charity Hours">
+                <field name="employee_id"/>
+                <field name="task_id"/>
+                <field name="charity_category_id"/>
+                <field name="project_id"/>
+                <separator/>
+                <filter name="filter_validated" string="Validated"
+                        domain="[('validated', '=', True)]"/>
+                <filter name="filter_pending" string="Pending Validation"
+                        domain="[('validated', '=', False)]"/>
+                <separator/>
+                <filter name="filter_timesheet" string="Timesheet"
+                        domain="[('source', '=', 'timesheet')]"/>
+                <filter name="filter_attendance" string="Attendance"
+                        domain="[('source', '=', 'attendance')]"/>
+                <separator/>
+                <filter name="filter_elks" string="Elks Only"
+                        domain="[('is_helper', '=', False)]"/>
+                <filter name="filter_helpers" string="Helpers Only"
+                        domain="[('is_helper', '=', True)]"/>
+                <group>
+                    <filter name="group_employee" string="Employee"
+                            context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_task" string="Task / Event"
+                            context="{'group_by': 'task_id'}"/>
+                    <filter name="group_category" string="GL Category"
+                            context="{'group_by': 'charity_category_id'}"/>
+                    <filter name="group_project" string="Project"
+                            context="{'group_by': 'project_id'}"/>
+                    <filter name="group_source" string="Source"
+                            context="{'group_by': 'source'}"/>
+                    <filter name="group_validated" string="Validated"
+                            context="{'group_by': 'validated'}"/>
+                    <filter name="group_lodge_year" string="Lodge Year"
+                            context="{'group_by': 'lodge_year'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Pivot view -->
+    <record id="view_charity_hours_report_pivot" model="ir.ui.view">
+        <field name="name">elks.charity.hours.report.pivot</field>
+        <field name="model">elks.charity.hours.report</field>
+        <field name="arch" type="xml">
+            <pivot string="Charity Hours">
+                <field name="charity_category_id" type="row"/>
+                <field name="hours" type="measure"/>
+                <field name="miles" type="measure"/>
+                <field name="cash_value" type="measure"/>
+                <field name="non_cash_value" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- Graph view -->
+    <record id="view_charity_hours_report_graph" model="ir.ui.view">
+        <field name="name">elks.charity.hours.report.graph</field>
+        <field name="model">elks.charity.hours.report</field>
+        <field name="arch" type="xml">
+            <graph string="Charity Hours">
+                <field name="charity_category_id"/>
+                <field name="hours" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- Actions -->
+    <record id="action_charity_hours_unified" model="ir.actions.act_window">
+        <field name="name">All Charity Hours</field>
+        <field name="res_model">elks.charity.hours.report</field>
+        <field name="view_mode">list,pivot,graph</field>
+    </record>
+
+    <record id="action_charity_hours_pending" model="ir.actions.act_window">
+        <field name="name">Hours Awaiting Validation</field>
+        <field name="res_model">elks.charity.hours.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="domain">[('validated', '=', False)]</field>
+    </record>
+</odoo>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_yearly_wrapup_wizard_form" model="ir.ui.view">
+        <field name="name">elks.charity.yearly.wrapup.wizard.form</field>
+        <field name="model">elks.charity.yearly.wrapup.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Year-End Charity Wrap-Up">
+                <sheet>
+                    <div class="oe_title">
+                        <h2>Close Lodge Year &amp; Start Next</h2>
+                        <p class="text-muted">
+                            Closing wraps up the current Charity Work project,
+                            generates the Grand Lodge annual report PDF, and
+                            creates the next year's project.
+                        </p>
+                    </div>
+                    <group>
+                        <field name="closing_project_id"/>
+                        <field name="closing_lodge_year" readonly="1"/>
+                        <field name="next_lodge_year"/>
+                        <field name="unvalidated_count" readonly="1"/>
+                    </group>
+                    <div class="alert alert-warning"
+                         role="alert"
+                         invisible="unvalidated_count == 0">
+                        <strong>Warning:</strong>
+                        <field name="unvalidated_count" readonly="1" class="oe_inline"/>
+                        hour line(s) on this project are NOT validated and will be
+                        excluded from the Grand Lodge report.  Validate them
+                        before wrapping up.
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_wrap_up" type="object"
+                            string="Close Year &amp; Generate Report"
+                            class="btn-primary"/>
+                    <button special="cancel" string="Cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_yearly_wrapup_wizard" model="ir.actions.act_window">
+        <field name="name">Year-End Wrap-Up</field>
+        <field name="res_model">elks.charity.yearly.wrapup.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

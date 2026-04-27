@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Root: Elks Charity -->
+    <menuitem id="menu_elkscharity_root"
+              name="Elks Charity"
+              sequence="55"
+              web_icon="elkscharity,static/description/icon.png"
+              groups="group_elkscharity_user"/>
+
+    <menuitem id="menu_elkscharity_projects"
+              name="Charity Projects"
+              parent="menu_elkscharity_root"
+              action="action_charity_projects"
+              sequence="10"/>
+
+    <menuitem id="menu_elkscharity_activities"
+              name="Charity Activities"
+              parent="menu_elkscharity_root"
+              action="action_charity_activities"
+              sequence="20"/>
+
+    <menuitem id="menu_elkscharity_hours"
+              name="Hours"
+              parent="menu_elkscharity_root"
+              sequence="30"/>
+
+    <menuitem id="menu_elkscharity_hours_all"
+              name="All Charity Hours"
+              parent="menu_elkscharity_hours"
+              action="action_charity_hours_unified"
+              sequence="10"/>
+
+    <menuitem id="menu_elkscharity_hours_validate"
+              name="Hours Awaiting Validation"
+              parent="menu_elkscharity_hours"
+              action="action_charity_hours_pending"
+              sequence="20"
+              groups="group_elkscharity_secretary"/>
+
+    <menuitem id="menu_elkscharity_wrapup"
+              name="Year-End Wrap-Up"
+              parent="menu_elkscharity_hours"
+              action="action_yearly_wrapup_wizard"
+              sequence="30"
+              groups="group_elkscharity_secretary"/>
+
+    <!-- Timecards / Reports -->
+    <menuitem id="menu_elkscharity_reports"
+              name="Reports"
+              parent="menu_elkscharity_root"
+              sequence="40"/>
+
+    <menuitem id="menu_elkscharity_grand_lodge_report"
+              name="Grand Lodge Charity Report"
+              parent="menu_elkscharity_reports"
+              action="action_grand_lodge_report_wizard"
+              sequence="5"/>
+
+    <menuitem id="menu_elkscharity_annual_report"
+              name="Charity Annual Report"
+              parent="menu_elkscharity_reports"
+              action="action_report_charity_annual"
+              sequence="7"
+              groups="group_elkscharity_secretary"/>
+
+    <menuitem id="menu_elkscharity_timecard_report"
+              name="Timecard Report"
+              parent="menu_elkscharity_reports"
+              action="action_elks_timecard_report_wizard"
+              sequence="10"/>
+
+    <!-- Also accessible from Attendance → Reporting -->
+    <menuitem id="menu_attendance_timecard_report"
+              name="Payroll Timecards"
+              parent="hr_attendance.menu_hr_attendance_reporting"
+              action="action_elks_timecard_report_wizard"
+              sequence="20"/>
+
+    <menuitem id="menu_elkscharity_config"
+              name="Configuration"
+              parent="menu_elkscharity_root"
+              sequence="99"
+              groups="group_elkscharity_secretary"/>
+
+    <menuitem id="menu_elkscharity_categories"
+              name="GL Categories"
+              parent="menu_elkscharity_config"
+              action="action_elks_charity_category"
+              sequence="10"/>
+</odoo>

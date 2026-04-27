@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- ===== Youth Programs ===== -->
+        <record id="cat_1001" model="elks.charity.category">
+            <field name="code">1001</field>
+            <field name="name">Youth Scholarships</field>
+            <field name="gl_section">youth</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="cat_1002" model="elks.charity.category">
+            <field name="code">1002</field>
+            <field name="name">Student of Month/Year</field>
+            <field name="gl_section">youth</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="cat_1004" model="elks.charity.category">
+            <field name="code">1004</field>
+            <field name="name">Youth Activities (Includes Youth Week)</field>
+            <field name="gl_section">youth</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="cat_1005" model="elks.charity.category">
+            <field name="code">1005</field>
+            <field name="name">Antlers Program</field>
+            <field name="gl_section">youth</field>
+            <field name="sequence">40</field>
+        </record>
+
+        <!-- ===== Youth Athletics ===== -->
+        <record id="cat_1101" model="elks.charity.category">
+            <field name="code">1101</field>
+            <field name="name">Youth Athletic Programs</field>
+            <field name="gl_section">athletics</field>
+            <field name="sequence">50</field>
+        </record>
+        <record id="cat_1102" model="elks.charity.category">
+            <field name="code">1102</field>
+            <field name="name">Hoop Shoot</field>
+            <field name="gl_section">athletics</field>
+            <field name="sequence">60</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+        <record id="cat_1103" model="elks.charity.category">
+            <field name="code">1103</field>
+            <field name="name">Soccer Shoot</field>
+            <field name="gl_section">athletics</field>
+            <field name="sequence">70</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+
+        <!-- ===== Special Programs ===== -->
+        <record id="cat_1201" model="elks.charity.category">
+            <field name="code">1201</field>
+            <field name="name">Special School Programs</field>
+            <field name="gl_section">special</field>
+            <field name="sequence">80</field>
+        </record>
+        <record id="cat_1202" model="elks.charity.category">
+            <field name="code">1202</field>
+            <field name="name">Special Needs Programs</field>
+            <field name="gl_section">special</field>
+            <field name="sequence">90</field>
+        </record>
+        <record id="cat_1203" model="elks.charity.category">
+            <field name="code">1203</field>
+            <field name="name">Special Equipment Used</field>
+            <field name="gl_section">special</field>
+            <field name="sequence">100</field>
+        </record>
+        <record id="cat_1204" model="elks.charity.category">
+            <field name="code">1204</field>
+            <field name="name">State Major Project</field>
+            <field name="gl_section">special</field>
+            <field name="sequence">110</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+        <record id="cat_1205" model="elks.charity.category">
+            <field name="code">1205</field>
+            <field name="name">Lodge Major Project</field>
+            <field name="gl_section">special</field>
+            <field name="sequence">120</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+
+        <!-- ===== Patriotic ===== -->
+        <record id="cat_1301" model="elks.charity.category">
+            <field name="code">1301</field>
+            <field name="name">Patriotic Programs</field>
+            <field name="gl_section">patriotic</field>
+            <field name="sequence">130</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+
+        <!-- ===== Veterans ===== -->
+        <record id="cat_1401" model="elks.charity.category">
+            <field name="code">1401</field>
+            <field name="name">Veterans' Service Events</field>
+            <field name="gl_section">veterans</field>
+            <field name="sequence">140</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+        <record id="cat_1402" model="elks.charity.category">
+            <field name="code">1402</field>
+            <field name="name">Veterans' Service Adopt-A-Vet Programs</field>
+            <field name="gl_section">veterans</field>
+            <field name="sequence">150</field>
+        </record>
+        <record id="cat_1403" model="elks.charity.category">
+            <field name="code">1403</field>
+            <field name="name">Veterans' Service Army of Hope Programs</field>
+            <field name="gl_section">veterans</field>
+            <field name="sequence">160</field>
+        </record>
+        <record id="cat_1404" model="elks.charity.category">
+            <field name="code">1404</field>
+            <field name="name">Veterans' Service Welcome Home Programs</field>
+            <field name="gl_section">veterans</field>
+            <field name="sequence">170</field>
+        </record>
+        <record id="cat_1405" model="elks.charity.category">
+            <field name="code">1405</field>
+            <field name="name">Veterans' Service Stand Down Programs</field>
+            <field name="gl_section">veterans</field>
+            <field name="sequence">180</field>
+        </record>
+        <record id="cat_1406" model="elks.charity.category">
+            <field name="code">1406</field>
+            <field name="name">Veterans' Service Facility Support</field>
+            <field name="gl_section">veterans</field>
+            <field name="sequence">190</field>
+        </record>
+
+        <!-- ===== Community Service ===== -->
+        <record id="cat_1501" model="elks.charity.category">
+            <field name="code">1501</field>
+            <field name="name">Community Service Donations</field>
+            <field name="gl_section">community</field>
+            <field name="sequence">200</field>
+        </record>
+        <record id="cat_1502" model="elks.charity.category">
+            <field name="code">1502</field>
+            <field name="name">Health Fairs / Blood Banks</field>
+            <field name="gl_section">community</field>
+            <field name="sequence">210</field>
+        </record>
+        <record id="cat_1503" model="elks.charity.category">
+            <field name="code">1503</field>
+            <field name="name">Lodge Facilities Donated</field>
+            <field name="gl_section">community</field>
+            <field name="sequence">220</field>
+        </record>
+        <record id="cat_1504" model="elks.charity.category">
+            <field name="code">1504</field>
+            <field name="name">Senior Citizen Programs</field>
+            <field name="gl_section">community</field>
+            <field name="sequence">230</field>
+        </record>
+        <record id="cat_1505" model="elks.charity.category">
+            <field name="code">1505</field>
+            <field name="name">Food Baskets</field>
+            <field name="gl_section">community</field>
+            <field name="sequence">240</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+        <record id="cat_1508" model="elks.charity.category">
+            <field name="code">1508</field>
+            <field name="name">Natural Disaster Relief Program, Inc.</field>
+            <field name="gl_section">community</field>
+            <field name="sequence">250</field>
+        </record>
+
+        <!-- ===== Public Service ===== -->
+        <record id="cat_1601" model="elks.charity.category">
+            <field name="code">1601</field>
+            <field name="name">Public Service / Citizen Recognition</field>
+            <field name="gl_section">public</field>
+            <field name="sequence">260</field>
+        </record>
+
+        <!-- ===== ENF ===== -->
+        <record id="cat_1701" model="elks.charity.category">
+            <field name="code">1701</field>
+            <field name="name">Elks National Foundation Donations</field>
+            <field name="gl_section">enf</field>
+            <field name="sequence">270</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+
+        <record id="cat_1702" model="elks.charity.category">
+            <field name="code">1702</field>
+            <field name="name">Elks National Foundation - Donation by Lodge/Assn</field>
+            <field name="gl_section">enf</field>
+            <field name="sequence">275</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+
+        <!-- ===== Drug Awareness ===== -->
+        <record id="cat_1801" model="elks.charity.category">
+            <field name="code">1801</field>
+            <field name="name">Drug Awareness Programs</field>
+            <field name="gl_section">drug</field>
+            <field name="sequence">280</field>
+            <field name="x_auto_create_task" eval="True"/>
+        </record>
+
+        <!-- ===== Auxiliary ===== -->
+        <record id="cat_1901" model="elks.charity.category">
+            <field name="code">1901</field>
+            <field name="name">Auxiliary Organizations</field>
+            <field name="gl_section">auxiliary</field>
+            <field name="sequence">290</field>
+        </record>
+
+        <!-- ===== Other ===== -->
+        <record id="cat_9999" model="elks.charity.category">
+            <field name="code">9999</field>
+            <field name="name">Categories Not Covered</field>
+            <field name="gl_section">other</field>
+            <field name="sequence">999</field>
+            <field name="description">Use only when a better category does not apply.  The Grand Lodge prefers specific categories; listing here should be rare.</field>
+        </record>
+    </data>
+</odoo>

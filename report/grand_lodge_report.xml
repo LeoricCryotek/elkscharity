@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Report action -->
+    <record id="action_report_grand_lodge" model="ir.actions.report">
+        <field name="name">Grand Lodge Charitable Giving</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">elkscharity.report_grand_lodge</field>
+        <field name="report_file">elkscharity.report_grand_lodge</field>
+        <field name="print_report_name">
+            'Grand_Lodge_Charity_%s_%s' % (object.date_from, object.date_to)
+        </field>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- Companion PDF report for download -->
+    <record id="action_report_grand_lodge_pdf" model="ir.actions.report">
+        <field name="name">Grand Lodge Charitable Giving (PDF)</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">elkscharity.report_grand_lodge</field>
+        <field name="report_file">elkscharity.report_grand_lodge</field>
+        <field name="print_report_name">
+            'Grand_Lodge_Charity_%s_%s' % (object.date_from, object.date_to)
+        </field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- QWeb template -->
+    <template id="report_grand_lodge">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="wizard">
+                    <t t-set="settings"
+                       t-value="wizard.env['elks.lodge.settings'].sudo().search([], limit=1)"/>
+
+                    <div class="page" style="font-size: 11px;">
+                        <!-- ===== LODGE HEADER WITH LOGOS ===== -->
+                        <table style="width: 100%; margin-bottom: 10px; border: none;">
+                            <tr>
+                                <!-- Left: Primary Elks USA logo -->
+                                <td style="width: 15%; text-align: center; vertical-align: middle; border: none; padding: 0;">
+                                    <t t-if="settings and settings.logo_primary">
+                                        <img t-att-src="image_data_uri(settings.logo_primary)"
+                                             style="max-height: 80px; max-width: 100px;"
+                                             alt="Elks USA"/>
+                                    </t>
+                                </td>
+                                <!-- Center: Lodge name and report title -->
+                                <td style="text-align: center; vertical-align: middle; border: none; padding: 0 10px;">
+                                    <h2 style="font-size: 22px; margin: 0 0 2px 0; color: #333;">
+                                        <t t-if="settings and settings.name">
+                                            <span t-field="settings.name"/>
+                                        </t>
+                                        <t t-else="">Elks Lodge</t>
+                                        <t t-if="settings and settings.lodge_number">
+                                            #<span t-field="settings.lodge_number"/>
+                                        </t>
+                                    </h2>
+                                    <p style="color: #777; font-size: 11px; margin: 0;">
+                                        Benevolent and Protective Order of Elks
+                                    </p>
+                                    <h3 style="font-size: 18px; margin: 6px 0 0 0; color: #003366;">
+                                        Charitable Giving Report
+                                    </h3>
+                                    <p style="font-size: 12px; color: #333; margin: 4px 0 0 0;">
+                                        <strong>Period:</strong>
+                                        <t t-out="wizard.date_from"/> to
+                                        <t t-out="wizard.date_to"/>
+                                    </p>
+                                </td>
+                                <!-- Right: Lodge logo -->
+                                <td style="width: 15%; text-align: center; vertical-align: middle; border: none; padding: 0;">
+                                    <t t-if="settings and settings.logo_lodge">
+                                        <img t-att-src="image_data_uri(settings.logo_lodge)"
+                                             style="max-height: 80px; max-width: 100px;"
+                                             alt="Lodge Logo"/>
+                                    </t>
+                                </td>
+                            </tr>
+                        </table>
+                        <!-- Divider -->
+                        <div style="border-top: 2px solid #003366; margin-bottom: 15px;"/>
+
+                        <t t-set="result" t-value="wizard._get_report_data()"/>
+
+                        <t t-if="not result['sections']">
+                            <p class="text-muted">
+                                No charitable activity found for the
+                                selected period and filters.
+                            </p>
+                        </t>
+
+                        <t t-foreach="result['sections']" t-as="section">
+                            <!-- Section header -->
+                            <div style="background-color: #003366; color: white;
+                                        padding: 6px 10px; margin-top: 15px;
+                                        font-weight: bold; font-size: 13px;">
+                                <t t-out="section['label']"/>
+                            </div>
+
+                            <t t-foreach="section['categories']" t-as="cat_data">
+                                <!-- Category sub-header -->
+                                <div style="background-color: #f0f0f0;
+                                            padding: 4px 10px; font-weight: bold;
+                                            border-bottom: 1px solid #ccc;
+                                            font-size: 11px;">
+                                    <t t-out="cat_data['category'].display_name"/>
+                                </div>
+
+                                <table class="table table-sm table-bordered"
+                                       style="font-size: 10px; margin-bottom: 0;">
+                                    <thead>
+                                        <tr style="background-color: #e8e8e8;">
+                                            <th style="width: 70px;">Date</th>
+                                            <th>Program</th>
+                                            <th style="width: 50px;">GL Code</th>
+                                            <th class="text-end" style="width: 55px;">
+                                                Head Count (B)</th>
+                                            <th class="text-end" style="width: 50px;">
+                                                # Elks (C)</th>
+                                            <th class="text-end" style="width: 55px;">
+                                                # Helpers (D)</th>
+                                            <th class="text-end" style="width: 55px;">
+                                                Elks Hrs (E)</th>
+                                            <th class="text-end" style="width: 60px;">
+                                                Helper Hrs (F)</th>
+                                            <th class="text-end" style="width: 55px;">
+                                                Elks Mi (G)</th>
+                                            <th class="text-end" style="width: 60px;">
+                                                Helper Mi (H)</th>
+                                            <th class="text-end" style="width: 65px;">
+                                                Non-Cash (I)</th>
+                                            <th class="text-end" style="width: 65px;">
+                                                Cash (J)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="cat_data['events']"
+                                           t-as="event">
+                                            <tr>
+                                                <td><t t-out="event['event_date']"/></td>
+                                                <td><t t-out="event['program_name']"/></td>
+                                                <td style="text-align: center; font-size: 9px; color: #555;">
+                                                    <t t-out="event.get('category_code', '')"/></td>
+                                                <td class="text-end">
+                                                    <t t-out="event['head_count']"/></td>
+                                                <td class="text-end">
+                                                    <t t-out="event['num_elks']"/></td>
+                                                <td class="text-end">
+                                                    <t t-out="event['num_helpers']"/></td>
+                                                <td class="text-end">
+                                                    <t t-out="'%.0f' % event['elks_hours']"/></td>
+                                                <td class="text-end">
+                                                    <t t-out="'%.0f' % event['helper_hours']"/></td>
+                                                <td class="text-end">
+                                                    <t t-out="'%.0f' % event['elks_miles']"/></td>
+                                                <td class="text-end">
+                                                    <t t-out="'%.0f' % event['helper_miles']"/></td>
+                                                <td class="text-end">
+                                                    $<t t-out="'%.2f' % event['non_cash']"/></td>
+                                                <td class="text-end">
+                                                    $<t t-out="'%.2f' % event['cash']"/></td>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr style="font-weight: bold;
+                                                   background-color: #f8f8f8;">
+                                            <td colspan="3" class="text-end">
+                                                <t t-out="cat_data['category'].code"/>
+                                                Total:</td>
+                                            <t t-set="t" t-value="cat_data['totals']"/>
+                                            <td class="text-end">
+                                                <t t-out="t['head_count']"/></td>
+                                            <td class="text-end">
+                                                <t t-out="t['num_elks']"/></td>
+                                            <td class="text-end">
+                                                <t t-out="t['num_helpers']"/></td>
+                                            <td class="text-end">
+                                                <t t-out="'%.0f' % t['elks_hours']"/></td>
+                                            <td class="text-end">
+                                                <t t-out="'%.0f' % t['helper_hours']"/></td>
+                                            <td class="text-end">
+                                                <t t-out="'%.0f' % t['elks_miles']"/></td>
+                                            <td class="text-end">
+                                                <t t-out="'%.0f' % t['helper_miles']"/></td>
+                                            <td class="text-end">
+                                                $<t t-out="'%.2f' % t['non_cash']"/></td>
+                                            <td class="text-end">
+                                                $<t t-out="'%.2f' % t['cash']"/></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </t>
+
+                            <!-- Section total -->
+                            <div style="text-align: right; font-weight: bold;
+                                        font-size: 11px; padding: 4px 10px;
+                                        background-color: #003366; color: white;">
+                                <t t-set="st" t-value="section['totals']"/>
+                                <t t-out="section['label']"/> Total:
+                                Head Count <t t-out="st['head_count']"/> |
+                                Elks <t t-out="st['num_elks']"/> |
+                                Helpers <t t-out="st['num_helpers']"/> |
+                                Hrs <t t-out="'%.0f' % (st['elks_hours'] + st['helper_hours'])"/> |
+                                Mi <t t-out="'%.0f' % (st['elks_miles'] + st['helper_miles'])"/> |
+                                $<t t-out="'%.2f' % (st['non_cash'] + st['cash'])"/>
+                            </div>
+                        </t>
+
+                        <!-- Grand total -->
+                        <t t-if="result['sections']">
+                            <div style="margin-top: 20px; padding: 8px 10px;
+                                        border-top: 3px double #333;
+                                        font-weight: bold; font-size: 13px;">
+                                <table style="width: 100%; font-size: 12px;">
+                                    <tr>
+                                        <t t-set="gt"
+                                           t-value="result['grand_totals']"/>
+                                        <td><strong>GRAND TOTAL</strong></td>
+                                        <td class="text-end">
+                                            Head Count:
+                                            <t t-out="gt['head_count']"/>
+                                        </td>
+                                        <td class="text-end">
+                                            Elks: <t t-out="gt['num_elks']"/>
+                                        </td>
+                                        <td class="text-end">
+                                            Helpers:
+                                            <t t-out="gt['num_helpers']"/>
+                                        </td>
+                                        <td class="text-end">
+                                            Hours:
+                                            <t t-out="'%.0f' % (gt['elks_hours'] + gt['helper_hours'])"/>
+                                        </td>
+                                        <td class="text-end">
+                                            Miles:
+                                            <t t-out="'%.0f' % (gt['elks_miles'] + gt['helper_miles'])"/>
+                                        </td>
+                                        <td class="text-end">
+                                            Non-Cash:
+                                            $<t t-out="'%.2f' % gt['non_cash']"/>
+                                        </td>
+                                        <td class="text-end">
+                                            Cash:
+                                            $<t t-out="'%.2f' % gt['cash']"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </t>
+                    </div>
+            </t>
+        </t>
+    </template>
+
+</odoo>

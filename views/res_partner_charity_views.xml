@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add Charity Contribution History to the Elks History tab on res.partner -->
+    <record id="view_partner_form_elks_charity_history" model="ir.ui.view">
+        <field name="name">res.partner.form.elks.charity.history</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='elks_history']" position="inside">
+                <separator string="Charity Contributions"/>
+                <field name="x_charity_hours_ids" readonly="1">
+                    <list>
+                        <field name="date" string="Date"/>
+                        <field name="task_id" string="Activity"/>
+                        <field name="x_charity_category_id" string="Category"/>
+                        <field name="unit_amount" string="Hours" sum="Total Hours"/>
+                        <field name="x_cash_value" string="Cash Donated" sum="Total Cash"/>
+                        <field name="x_non_cash_value" string="Non-Cash Value" sum="Total Non-Cash"/>
+                        <field name="x_miles" string="Miles" sum="Total Miles"/>
+                        <field name="x_validated" string="Validated"/>
+                    </list>
+                </field>
+            </xpath>
+        </field>
+    </record>
+</odoo>

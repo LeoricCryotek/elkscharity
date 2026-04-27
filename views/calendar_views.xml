@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add Charity Activity field + Log Hours button to calendar event form -->
+    <record id="view_calendar_event_form_elkscharity" model="ir.ui.view">
+        <field name="name">calendar.event.form.elkscharity</field>
+        <field name="model">calendar.event</field>
+        <field name="inherit_id" ref="calendar.view_calendar_event_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Elks Charity Activity">
+                    <group>
+                        <field name="x_charity_task_id"
+                               options="{'no_create': True}"/>
+                        <field name="x_charity_category_id" readonly="1"
+                               invisible="not x_charity_task_id"/>
+                        <field name="x_charity_category_code" readonly="1"
+                               invisible="not x_charity_task_id"/>
+                    </group>
+                    <group>
+                        <button name="action_log_charity_hours"
+                                type="object"
+                                string="Log Volunteer Hours"
+                                class="btn-primary"
+                                icon="fa-clock-o"
+                                invisible="not x_charity_task_id"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

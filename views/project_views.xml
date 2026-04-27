@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Charity fields on the project form -->
+    <record id="view_project_form_elkscharity" model="ir.ui.view">
+        <field name="name">project.project.form.elkscharity</field>
+        <field name="model">project.project</field>
+        <field name="inherit_id" ref="project.edit_project"/>
+        <field name="arch" type="xml">
+            <!-- Hide the Settings tab on charity projects -->
+            <xpath expr="//page[@name='settings']" position="attributes">
+                <attribute name="invisible">x_is_charity_parent</attribute>
+            </xpath>
+            <!-- Add "View Activities" smart button on charity projects -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_charity_dashboard"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-calendar-check-o"
+                        invisible="not x_is_charity_parent">
+                    <div class="o_stat_info">
+                        <field name="task_count" string="Activities"
+                               widget="statinfo"/>
+                    </div>
+                </button>
+            </xpath>
+            <xpath expr="//sheet" position="inside">
+                <group string="Elks Charity" invisible="not x_is_charity_parent">
+                    <group>
+                        <field name="x_is_charity_parent"/>
+                        <field name="x_lodge_year"/>
+                        <field name="x_is_closed"/>
+                    </group>
+                    <group>
+                        <field name="x_total_hours"/>
+                        <field name="x_total_miles"/>
+                        <field name="x_total_cash"/>
+                        <field name="x_total_non_cash"/>
+                        <field name="x_total_participants"/>
+                        <field name="currency_id" invisible="1"/>
+                    </group>
+                </group>
+                <group invisible="x_is_charity_parent">
+                    <field name="x_is_charity_parent"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Project task: charity fields -->
+    <record id="view_task_form_elkscharity" model="ir.ui.view">
+        <field name="name">project.task.form.elkscharity</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_form2"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Elks Charity Reporting"
+                       invisible="not x_is_charity_activity">
+                    <group>
+                        <field name="x_charity_category_id"
+                               options="{'no_create': True}"/>
+                        <field name="x_charity_category_code" readonly="1"/>
+                        <field name="x_event_date"/>
+                        <field name="x_head_count"/>
+                        <field name="x_recipient_org"/>
+                    </group>
+                    <group string="Roll-Up (validated hours only)">
+                        <field name="x_elks_count"/>
+                        <field name="x_elks_hours"/>
+                        <field name="x_elks_miles"/>
+                        <field name="x_helper_count"/>
+                        <field name="x_helper_hours"/>
+                        <field name="x_helper_miles"/>
+                        <field name="x_cash_total"/>
+                        <field name="x_non_cash_total"/>
+                        <field name="x_currency_id" invisible="1"/>
+                    </group>
+                </group>
+                <group invisible="not x_is_charity_activity">
+                    <field name="x_charity_notes" placeholder="Notes..."/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Dedicated list view for Charity Activities (replaces generic task list) -->
+    <record id="view_task_tree_charity_activities" model="ir.ui.view">
+        <field name="name">project.task.tree.charity.activities</field>
+        <field name="model">project.task</field>
+        <field name="arch" type="xml">
+            <list string="Charity Activities">
+                <field name="x_event_date" string="Date"/>
+                <field name="name" string="Activity"/>
+                <field name="project_id" string="Project"/>
+                <field name="x_charity_category_id" string="Category"/>
+                <field name="x_head_count" string="Head Count" sum="Total"/>
+                <field name="x_elks_count" string="# Elks" sum="Total"/>
+                <field name="x_helper_count" string="# Helpers" sum="Total"/>
+                <field name="x_elks_hours" string="Elks Hrs" sum="Total"
+                       widget="float_time"/>
+                <field name="x_helper_hours" string="Helper Hrs" sum="Total"
+                       widget="float_time"/>
+                <field name="x_elks_miles" string="Elks Mi" sum="Total"
+                       optional="show"/>
+                <field name="x_helper_miles" string="Helper Mi" sum="Total"
+                       optional="show"/>
+                <field name="x_cash_total" string="Cash" sum="Total"/>
+                <field name="x_non_cash_total" string="Non-Cash" sum="Total"/>
+                <field name="x_currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search view: filter/group by charity category -->
+    <record id="view_task_search_elkscharity" model="ir.ui.view">
+        <field name="name">project.task.search.elkscharity</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_search_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="filter_charity" string="Charity Activities"
+                        domain="[('x_is_charity_activity', '=', True)]"/>
+                <group>
+                    <filter name="group_category" string="Charity Category"
+                            context="{'group_by': 'x_charity_category_id'}"/>
+                    <filter name="group_section" string="GL Section"
+                            context="{'group_by': 'x_charity_section'}"/>
+                    <filter name="group_lodge_year" string="Lodge Year"
+                            context="{'group_by': 'x_lodge_year'}"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Dedicated Charity Activities action -->
+    <record id="action_charity_activities" model="ir.actions.act_window">
+        <field name="name">Charity Activities</field>
+        <field name="res_model">project.task</field>
+        <field name="view_mode">list,pivot,graph,form</field>
+        <field name="domain">[('x_is_charity_activity', '=', True)]</field>
+    </record>
+    <!-- Use our dedicated charity list view instead of the generic task list -->
+    <record id="action_charity_activities_tree" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_task_tree_charity_activities"/>
+        <field name="act_window_id" ref="action_charity_activities"/>
+    </record>
+
+    <record id="action_charity_projects" model="ir.actions.act_window">
+        <field name="name">Charity Projects</field>
+        <field name="res_model">project.project</field>
+        <field name="view_mode">list,form,kanban</field>
+        <field name="domain">[('x_is_charity_parent', '=', True)]</field>
+    </record>
+</odoo>

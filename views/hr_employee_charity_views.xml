@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Timecard smart button on the employee form -->
+    <record id="view_employee_form_timecard_button" model="ir.ui.view">
+        <field name="name">hr.employee.form.timecard.button</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_timecard"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-clock-o"
+                        invisible="x_is_volunteer">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Timecard</span>
+                    </div>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add "Default Charity Activity" to the employee form -->
+    <record id="view_employee_form_elkscharity" model="ir.ui.view">
+        <field name="name">hr.employee.form.elkscharity</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Charity / Volunteer Kiosk Settings">
+                    <group>
+                        <field name="x_default_charity_task_id"
+                               options="{'no_create': True}"
+                               help="Set this to auto-tag attendance check-ins with a charity activity. Works from kiosk, systray, and manual entry."/>
+                    </group>
+                    <group>
+                        <div class="text-muted" style="padding-top: 8px;">
+                            When a Default Charity Activity is set, every
+                            new clock-in for this employee will be
+                            automatically tagged for the Grand Lodge
+                            Charity Report. Clear the field to stop
+                            auto-tagging.
+                        </div>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

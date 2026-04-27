@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Extend timesheet line (account.analytic.line) form -->
+    <record id="view_timesheet_form_elkscharity" model="ir.ui.view">
+        <field name="name">account.analytic.line.form.elkscharity</field>
+        <field name="model">account.analytic.line</field>
+        <field name="inherit_id" ref="hr_timesheet.hr_timesheet_line_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Elks Charity"
+                       invisible="not x_is_charity_line">
+                    <group>
+                        <field name="x_charity_category_id" readonly="1"/>
+                        <field name="x_is_helper"/>
+                        <field name="x_miles"/>
+                    </group>
+                    <group>
+                        <field name="x_cash_value"/>
+                        <field name="x_non_cash_value"/>
+                        <field name="x_validated" readonly="1"/>
+                        <field name="x_validated_by" readonly="1"
+                               invisible="not x_validated"/>
+                        <field name="x_validated_on" readonly="1"
+                               invisible="not x_validated"/>
+                    </group>
+                </group>
+                <group invisible="not x_is_charity_line">
+                    <field name="x_charity_notes" placeholder="Notes..."/>
+                </group>
+                <group invisible="not x_is_charity_line or not x_validated">
+                    <button name="action_unvalidate_hours" type="object"
+                            string="Unvalidate" class="btn-link"/>
+                </group>
+                <group invisible="not x_is_charity_line or x_validated">
+                    <button name="action_validate_hours" type="object"
+                            string="Validate for Grand Lodge Report"
+                            class="btn-primary"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Extend timesheet line tree -->
+    <record id="view_timesheet_tree_elkscharity" model="ir.ui.view">
+        <field name="name">account.analytic.line.tree.elkscharity</field>
+        <field name="model">account.analytic.line</field>
+        <field name="inherit_id" ref="hr_timesheet.hr_timesheet_line_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='unit_amount']" position="after">
+                <field name="x_is_charity_line" optional="hide"/>
+                <field name="x_charity_category_id" optional="hide"/>
+                <field name="x_is_helper" optional="hide"/>
+                <field name="x_miles" optional="hide"/>
+                <field name="x_cash_value" optional="hide"/>
+                <field name="x_non_cash_value" optional="hide"/>
+                <field name="x_validated" optional="show" widget="boolean_toggle"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Dedicated "Charity Hours to Validate" action -->
+    <record id="action_validate_charity_hours" model="ir.actions.act_window">
+        <field name="name">Hours Awaiting Validation</field>
+        <field name="res_model">account.analytic.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('task_id.project_id.x_is_charity_parent', '=', True),
+            ('x_validated', '=', False),
+        ]</field>
+        <field name="context">{
+            'search_default_group_category': 1,
+        }</field>
+    </record>
+
+    <record id="action_charity_hours_all" model="ir.actions.act_window">
+        <field name="name">All Charity Hours</field>
+        <field name="res_model">account.analytic.line</field>
+        <field name="view_mode">list,pivot,graph,form</field>
+        <field name="domain">[('task_id.project_id.x_is_charity_parent', '=', True)]</field>
+    </record>
+
+    <!-- Bulk validation: server action available from list view -->
+    <record id="action_bulk_validate_charity_hours" model="ir.actions.server">
+        <field name="name">Validate Charity Hours</field>
+        <field name="model_id" ref="analytic.model_account_analytic_line"/>
+        <field name="binding_model_id" ref="analytic.model_account_analytic_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+records.filtered(lambda l: l.x_is_charity_line and not l.x_validated).action_validate_hours()
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Hours Validated',
+        'message': '%d charity hour line(s) validated.' % len(records),
+        'type': 'success',
+    },
+}
+        </field>
+    </record>
+</odoo>

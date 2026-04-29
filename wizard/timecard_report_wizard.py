@@ -52,9 +52,9 @@ class ElksTimecardReportWizard(models.TransientModel):
         MONTH_CHOICES, string="Month",
         default=lambda self: str(fields.Date.context_today(self).month),
     )
-    period_year = fields.Integer(
+    period_year = fields.Char(
         "Year",
-        default=lambda self: fields.Date.context_today(self).year,
+        default=lambda self: str(fields.Date.context_today(self).year),
     )
     period_display = fields.Char(
         "Period", compute='_compute_period_display',
@@ -131,7 +131,7 @@ class ElksTimecardReportWizard(models.TransientModel):
         if not self.period_month or not self.period_year:
             return
         month = int(self.period_month)
-        year = self.period_year
+        year = int(self.period_year)
         if self.pay_period == 'first_half':
             self.date_from = date(year, month, 1)
             self.date_to = date(year, month, 15)
@@ -155,10 +155,10 @@ class ElksTimecardReportWizard(models.TransientModel):
             # Go to previous month's 16th–end
             self.pay_period = 'second_half'
             month = int(self.period_month)
-            year = self.period_year
+            year = int(self.period_year)
             if month == 1:
                 self.period_month = '12'
-                self.period_year = year - 1
+                self.period_year = str(year - 1)
             else:
                 self.period_month = str(month - 1)
         elif self.pay_period == 'second_half':
@@ -181,10 +181,10 @@ class ElksTimecardReportWizard(models.TransientModel):
             # Go to next month's 1st–15th
             self.pay_period = 'first_half'
             month = int(self.period_month)
-            year = self.period_year
+            year = int(self.period_year)
             if month == 12:
                 self.period_month = '1'
-                self.period_year = year + 1
+                self.period_year = str(year + 1)
             else:
                 self.period_month = str(month + 1)
         self._onchange_period()

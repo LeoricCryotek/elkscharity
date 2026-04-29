@@ -12,7 +12,8 @@
                         <field name="period_month"
                                invisible="pay_period == 'custom'"/>
                         <field name="period_year"
-                               invisible="pay_period == 'custom'"/>
+                               invisible="pay_period == 'custom'"
+                               options="{'format': false}"/>
                         <field name="period_display" readonly="1"
                                string="Selected Period"/>
                         <field name="date_from"

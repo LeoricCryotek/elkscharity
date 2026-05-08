@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- HTML preview -->
+    <record id="action_report_meeting_summary" model="ir.actions.report">
+        <field name="name">Charity Meeting Summary</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">elkscharity.report_meeting_summary</field>
+        <field name="report_file">elkscharity.report_meeting_summary</field>
+        <field name="print_report_name">
+            'Charity_Meeting_Summary_%s' % object.date_to
+        </field>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- PDF download -->
+    <record id="action_report_meeting_summary_pdf" model="ir.actions.report">
+        <field name="name">Charity Meeting Summary (PDF)</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">elkscharity.report_meeting_summary</field>
+        <field name="report_file">elkscharity.report_meeting_summary</field>
+        <field name="print_report_name">
+            'Charity_Meeting_Summary_%s' % object.date_to
+        </field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <template id="report_meeting_summary">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="wizard">
+                <t t-set="settings"
+                   t-value="wizard.env['elks.lodge.settings'].sudo().search([], limit=1)"/>
+                <t t-set="data" t-value="wizard._get_meeting_summary_data()"/>
+
+                <div class="page" style="font-family: Arial, sans-serif; font-size: 12px; color: #222;">
+
+                    <!-- ===== HEADER ===== -->
+                    <table style="width: 100%; margin-bottom: 6px; border: none;">
+                        <tr>
+                            <td style="width: 15%; text-align: center; vertical-align: middle; border: none; padding: 0;">
+                                <t t-if="settings and settings.logo_primary">
+                                    <img t-att-src="image_data_uri(settings.logo_primary)"
+                                         style="max-height: 85px; max-width: 110px;"
+                                         alt="Elks USA"/>
+                                </t>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle; border: none; padding: 0 10px;">
+                                <h1 style="font-size: 26px; margin: 0 0 2px 0; color: #003366; letter-spacing: 0.5px;">
+                                    <t t-if="settings and settings.name">
+                                        <span t-field="settings.name"/>
+                                    </t>
+                                    <t t-else="">Elks Lodge</t>
+                                    <t t-if="settings and settings.lodge_number">
+                                        #<span t-field="settings.lodge_number"/>
+                                    </t>
+                                </h1>
+                                <p style="color: #777; font-size: 11px; margin: 0;">
+                                    Benevolent and Protective Order of Elks
+                                </p>
+                                <h2 style="font-size: 20px; margin: 8px 0 0 0; color: #333;">
+                                    Charitable Giving Summary
+                                </h2>
+                                <p style="font-size: 12px; color: #555; margin: 4px 0 0 0;">
+                                    <t t-out="data['date_from']"/> through
+                                    <t t-out="data['date_to']"/>
+                                    <span style="margin-left: 12px; color: #888;">|</span>
+                                    <span style="margin-left: 12px; font-style: italic; color: #888;">
+                                        Changes since <t t-out="data['prior_date_to']"/>
+                                    </span>
+                                </p>
+                            </td>
+                            <td style="width: 15%; text-align: center; vertical-align: middle; border: none; padding: 0;">
+                                <t t-if="settings and settings.logo_lodge">
+                                    <img t-att-src="image_data_uri(settings.logo_lodge)"
+                                         style="max-height: 85px; max-width: 110px;"
+                                         alt="Lodge Logo"/>
+                                </t>
+                            </td>
+                        </tr>
+                    </table>
+                    <div style="border-top: 3px solid #003366; margin-bottom: 20px;"/>
+
+                    <!-- ===== GRAND TOTAL HIGHLIGHT CARDS ===== -->
+                    <t t-set="gt" t-value="data['grand_totals']"/>
+                    <t t-set="gd" t-value="data['grand_deltas']"/>
+                    <table style="width: 100%; border-collapse: separate; border-spacing: 8px 0; margin-bottom: 20px;">
+                        <tr>
+                            <!-- People Served -->
+                            <td style="width: 20%; background: #003366; color: white; border-radius: 6px; padding: 12px 14px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: bold; line-height: 1.1;">
+                                    <t t-out="'{:,}'.format(gt['head_count'])"/>
+                                </div>
+                                <div style="font-size: 11px; margin-top: 2px; opacity: 0.85;">People Served</div>
+                                <t t-if="gd['head_count']">
+                                    <div style="font-size: 11px; margin-top: 4px; color: #8fc98f;">
+                                        +<t t-out="'{:,}'.format(gd['head_count'])"/> this month
+                                    </div>
+                                </t>
+                            </td>
+                            <!-- Volunteers -->
+                            <td style="width: 20%; background: #003366; color: white; border-radius: 6px; padding: 12px 14px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: bold; line-height: 1.1;">
+                                    <t t-out="'{:,}'.format(gt['num_elks'] + gt['num_helpers'])"/>
+                                </div>
+                                <div style="font-size: 11px; margin-top: 2px; opacity: 0.85;">
+                                    Volunteers
+                                    <span style="font-size: 9px;">
+                                        (<t t-out="gt['num_elks']"/> Elks,
+                                        <t t-out="gt['num_helpers']"/> Helpers)
+                                    </span>
+                                </div>
+                                <t t-if="gd['num_elks'] + gd['num_helpers']">
+                                    <div style="font-size: 11px; margin-top: 4px; color: #8fc98f;">
+                                        +<t t-out="'{:,}'.format(gd['num_elks'] + gd['num_helpers'])"/> this month
+                                    </div>
+                                </t>
+                            </td>
+                            <!-- Hours -->
+                            <td style="width: 20%; background: #003366; color: white; border-radius: 6px; padding: 12px 14px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: bold; line-height: 1.1;">
+                                    <t t-out="'{:,.0f}'.format(gt['elks_hours'] + gt['helper_hours'])"/>
+                                </div>
+                                <div style="font-size: 11px; margin-top: 2px; opacity: 0.85;">Total Hours</div>
+                                <t t-if="gd['elks_hours'] + gd['helper_hours']">
+                                    <div style="font-size: 11px; margin-top: 4px; color: #8fc98f;">
+                                        +<t t-out="'{:,.0f}'.format(gd['elks_hours'] + gd['helper_hours'])"/> this month
+                                    </div>
+                                </t>
+                            </td>
+                            <!-- Miles -->
+                            <td style="width: 20%; background: #003366; color: white; border-radius: 6px; padding: 12px 14px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: bold; line-height: 1.1;">
+                                    <t t-out="'{:,.0f}'.format(gt['elks_miles'] + gt['helper_miles'])"/>
+                                </div>
+                                <div style="font-size: 11px; margin-top: 2px; opacity: 0.85;">Total Miles</div>
+                                <t t-if="gd['elks_miles'] + gd['helper_miles']">
+                                    <div style="font-size: 11px; margin-top: 4px; color: #8fc98f;">
+                                        +<t t-out="'{:,.0f}'.format(gd['elks_miles'] + gd['helper_miles'])"/> this month
+                                    </div>
+                                </t>
+                            </td>
+                            <!-- Dollar Value -->
+                            <td style="width: 20%; background: #003366; color: white; border-radius: 6px; padding: 12px 14px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: bold; line-height: 1.1;">
+                                    $<t t-out="'{:,.0f}'.format(gt['cash'] + gt['non_cash'])"/>
+                                </div>
+                                <div style="font-size: 11px; margin-top: 2px; opacity: 0.85;">
+                                    Total Value
+                                    <span style="font-size: 9px;">
+                                        ($<t t-out="'{:,.0f}'.format(gt['cash'])"/> cash,
+                                        $<t t-out="'{:,.0f}'.format(gt['non_cash'])"/> in-kind)
+                                    </span>
+                                </div>
+                                <t t-if="gd['cash'] + gd['non_cash']">
+                                    <div style="font-size: 11px; margin-top: 4px; color: #8fc98f;">
+                                        +$<t t-out="'{:,.0f}'.format(gd['cash'] + gd['non_cash'])"/> this month
+                                    </div>
+                                </t>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- ===== SECTION BREAKDOWN TABLE ===== -->
+                    <t t-if="data['sections']">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <thead>
+                                <tr style="background: #e8eef4; border-bottom: 2px solid #003366;">
+                                    <th style="padding: 8px 10px; text-align: left; width: 22%;">Program Area</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 10%;">People Served</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 9%;"># Elks</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 10%;"># Non-Elks</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 10%;">Hours</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 10%;">Miles</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 10%;">Non-Cash</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 9%;">Cash</th>
+                                    <th style="padding: 8px 6px; text-align: right; width: 10%;">Total $</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="data['sections']" t-as="sec">
+                                    <t t-set="t" t-value="sec['totals']"/>
+                                    <t t-set="d" t-value="sec['deltas']"/>
+                                    <t t-set="row_bg"
+                                       t-value="'#f9f9f9' if sec_index % 2 == 0 else '#ffffff'"/>
+                                    <tr t-att-style="'background: %s; border-bottom: 1px solid #ddd;' % row_bg">
+                                        <td style="padding: 10px 10px; font-weight: bold; color: #003366;">
+                                            <t t-out="sec['label']"/>
+                                        </td>
+                                        <!-- People Served -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                <t t-out="'{:,}'.format(t['head_count'])"/>
+                                            </div>
+                                            <t t-if="d['head_count']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +<t t-out="'{:,}'.format(d['head_count'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                        <!-- # Elks -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                <t t-out="'{:,}'.format(t['num_elks'])"/>
+                                            </div>
+                                            <t t-if="d['num_elks']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +<t t-out="'{:,}'.format(d['num_elks'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                        <!-- # Non-Elks -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                <t t-out="'{:,}'.format(t['num_helpers'])"/>
+                                            </div>
+                                            <t t-if="d['num_helpers']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +<t t-out="'{:,}'.format(d['num_helpers'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                        <!-- Hours (combined) -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                <t t-out="'{:,.0f}'.format(t['elks_hours'] + t['helper_hours'])"/>
+                                            </div>
+                                            <t t-if="d['elks_hours'] + d['helper_hours']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +<t t-out="'{:,.0f}'.format(d['elks_hours'] + d['helper_hours'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                        <!-- Miles (combined) -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                <t t-out="'{:,.0f}'.format(t['elks_miles'] + t['helper_miles'])"/>
+                                            </div>
+                                            <t t-if="d['elks_miles'] + d['helper_miles']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +<t t-out="'{:,.0f}'.format(d['elks_miles'] + d['helper_miles'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                        <!-- Non-Cash -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                $<t t-out="'{:,.0f}'.format(t['non_cash'])"/>
+                                            </div>
+                                            <t t-if="d['non_cash']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +$<t t-out="'{:,.0f}'.format(d['non_cash'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                        <!-- Cash -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                $<t t-out="'{:,.0f}'.format(t['cash'])"/>
+                                            </div>
+                                            <t t-if="d['cash']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +$<t t-out="'{:,.0f}'.format(d['cash'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                        <!-- Total $ -->
+                                        <td style="padding: 10px 6px; text-align: right;">
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                $<t t-out="'{:,.0f}'.format(t['cash'] + t['non_cash'])"/>
+                                            </div>
+                                            <t t-if="d['cash'] + d['non_cash']">
+                                                <div style="font-size: 9px; color: #2e8b57;">
+                                                    +$<t t-out="'{:,.0f}'.format(d['cash'] + d['non_cash'])"/>
+                                                </div>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                            <!-- GRAND TOTAL ROW -->
+                            <tfoot>
+                                <tr style="background: #003366; color: white; font-weight: bold; font-size: 13px;">
+                                    <td style="padding: 10px 10px;">GRAND TOTAL</td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        <t t-out="'{:,}'.format(gt['head_count'])"/>
+                                    </td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        <t t-out="'{:,}'.format(gt['num_elks'])"/>
+                                    </td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        <t t-out="'{:,}'.format(gt['num_helpers'])"/>
+                                    </td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        <t t-out="'{:,.0f}'.format(gt['elks_hours'] + gt['helper_hours'])"/>
+                                    </td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        <t t-out="'{:,.0f}'.format(gt['elks_miles'] + gt['helper_miles'])"/>
+                                    </td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        $<t t-out="'{:,.0f}'.format(gt['non_cash'])"/>
+                                    </td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        $<t t-out="'{:,.0f}'.format(gt['cash'])"/>
+                                    </td>
+                                    <td style="padding: 10px 6px; text-align: right;">
+                                        $<t t-out="'{:,.0f}'.format(gt['cash'] + gt['non_cash'])"/>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </t>
+
+                    <t t-if="not data['sections']">
+                        <div style="text-align: center; padding: 40px 0; color: #999;">
+                            <p style="font-size: 16px;">No charitable activity recorded for this period.</p>
+                        </div>
+                    </t>
+
+                    <!-- Footer -->
+                    <div style="margin-top: 24px; text-align: center; color: #aaa; font-size: 9px;">
+                        Generated from the Elks Lodge management system.
+                        Only <strong>validated</strong> hours and
+                        <strong>confirmed</strong> contributions are included.
+                        <br/>
+                        Green figures show increases since
+                        <t t-out="data['prior_date_to']"/>.
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+</odoo>

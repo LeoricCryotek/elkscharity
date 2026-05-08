@@ -67,7 +67,7 @@ class ProjectProject(models.Model):
         "People Served", compute="_compute_charity_totals",
     )
 
-    @api.depends("task_ids", "task_ids.x_head_count",
+    @api.depends("task_ids", "task_ids.x_total_head_count",
                  "task_ids.x_elks_hours",
                  "task_ids.x_helper_hours",
                  "task_ids.x_elks_miles",
@@ -89,7 +89,7 @@ class ProjectProject(models.Model):
             )
             rec.x_total_cash = sum(tasks.mapped('x_cash_total'))
             rec.x_total_non_cash = sum(tasks.mapped('x_non_cash_total'))
-            rec.x_total_participants = sum(tasks.mapped('x_head_count'))
+            rec.x_total_participants = sum(tasks.mapped('x_total_head_count'))
 
     @api.model
     def create_charity_parent_project(self, lodge_year=None):

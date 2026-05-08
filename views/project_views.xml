@@ -92,7 +92,7 @@
                 <field name="name" string="Activity"/>
                 <field name="project_id" string="Project"/>
                 <field name="x_charity_category_id" string="Category"/>
-                <field name="x_head_count" string="Head Count" sum="Total"/>
+                <field name="x_total_head_count" string="Head Count" sum="Total"/>
                 <field name="x_elks_count" string="# Elks" sum="Total"/>
                 <field name="x_helper_count" string="# Helpers" sum="Total"/>
                 <field name="x_elks_hours" string="Elks Hrs" sum="Total"

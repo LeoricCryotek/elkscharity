@@ -8,3 +8,4 @@ from . import hr_attendance
 from . import hr_employee_charity
 from . import res_partner_charity
 from . import charity_hours_report
+from . import charity_contribution

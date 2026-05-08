@@ -13,6 +13,7 @@ Filters: by event/task, by employee, by month, by lodge year.
 import base64
 import csv
 import io
+from dateutil.relativedelta import relativedelta
 
 from odoo import api, fields, models
 
@@ -79,28 +80,41 @@ class GrandLodgeReportWizard(models.TransientModel):
             task_domain, order='x_charity_category_code, x_event_date, name'
         )
 
-        # Get attendance records in date range for these tasks
+        # Get validated attendance records in date range for these tasks
         att_domain = [
             ('x_charity_task_id', 'in', tasks.ids),
             ('date', '>=', self.date_from),
             ('date', '<=', self.date_to),
             ('check_out', '!=', False),
+            ('x_validated', '=', True),
         ]
         if self.employee_ids:
             att_domain.append(('employee_id', 'in', self.employee_ids.ids))
 
         attendances = self.env['hr.attendance'].search(att_domain)
 
-        # Get timesheet lines in date range for these tasks
+        # Get validated timesheet lines in date range for these tasks
         ts_domain = [
             ('task_id', 'in', tasks.ids),
             ('date', '>=', self.date_from),
             ('date', '<=', self.date_to),
+            ('x_validated', '=', True),
         ]
         if self.employee_ids:
             ts_domain.append(('employee_id', 'in', self.employee_ids.ids))
 
         timesheets = self.env['account.analytic.line'].search(ts_domain)
+
+        # Get confirmed contributions in date range for these tasks
+        contrib_domain = [
+            ('task_id', 'in', tasks.ids),
+            ('contribution_date', '>=', self.date_from),
+            ('contribution_date', '<=', self.date_to),
+            ('state', '=', 'confirmed'),
+        ]
+        contributions = self.env['elks.charity.contribution'].search(
+            contrib_domain
+        )
 
         # Build per-task aggregates
         task_data = {}
@@ -110,6 +124,9 @@ class GrandLodgeReportWizard(models.TransientModel):
             )
             task_ts = timesheets.filtered(
                 lambda l: l.task_id.id == task.id
+            )
+            task_contribs = contributions.filtered(
+                lambda c: c.task_id.id == task.id
             )
 
             # Dedupe: attendance wins over timesheet for same employee+date
@@ -126,20 +143,27 @@ class GrandLodgeReportWizard(models.TransientModel):
             ts_elks = ts_kept.filtered(lambda l: not l.x_is_helper)
             ts_help = ts_kept.filtered('x_is_helper')
 
+            # Contribution aggregates (additive — no overlap with attendance)
+            c_cash = sum(task_contribs.mapped('cash_value'))
+            c_non_cash = sum(task_contribs.mapped('non_cash_value'))
+            c_elks = sum(task_contribs.mapped('elks_count'))
+            c_helpers = sum(task_contribs.mapped('helper_count'))
+            c_heads = sum(task_contribs.mapped('head_count'))
+
             row = {
                 'task': task,
                 'event_date': task.x_event_date or self.date_from,
                 'program_name': task.name,
                 'category_code': task.x_charity_category_code or '',
-                'head_count': task.x_head_count,
+                'head_count': task.x_head_count + c_heads,
                 'num_elks': len(set(
                     ts_elks.mapped('employee_id.id')
                     + att_elks.mapped('employee_id.id')
-                )),
+                )) + c_elks,
                 'num_helpers': len(set(
                     ts_help.mapped('employee_id.id')
                     + att_help.mapped('employee_id.id')
-                )),
+                )) + c_helpers,
                 'elks_hours': (
                     sum(ts_elks.mapped('unit_amount'))
                     + sum(
@@ -165,10 +189,12 @@ class GrandLodgeReportWizard(models.TransientModel):
                 'non_cash': (
                     sum(ts_kept.mapped('x_non_cash_value'))
                     + sum(task_att.mapped('x_non_cash_value'))
+                    + c_non_cash
                 ),
                 'cash': (
                     sum(ts_kept.mapped('x_cash_value'))
                     + sum(task_att.mapped('x_cash_value'))
+                    + c_cash
                 ),
             }
 
@@ -273,6 +299,85 @@ class GrandLodgeReportWizard(models.TransientModel):
             'date_to': self.date_to,
         }
 
+    def _get_meeting_summary_data(self):
+        """Build meeting-presentation data with month-over-month deltas.
+
+        Runs the full report twice: once for the entire period, once for
+        everything up to one month before date_to.  The difference is
+        "this month's contribution."
+        """
+        current = self._get_report_data()
+
+        # Calculate the prior-month cutoff
+        prior_date_to = self.date_to - relativedelta(months=1)
+        if prior_date_to < self.date_from:
+            prior_date_to = self.date_from
+
+        # Temporarily swap date_to to get the prior period totals
+        saved_date_to = self.date_to
+        self.date_to = prior_date_to
+        prior = self._get_report_data()
+        self.date_to = saved_date_to
+
+        # Build prior section lookup
+        prior_section_map = {}
+        for sec in prior.get('sections', []):
+            prior_section_map[sec['key']] = sec['totals']
+
+        _TOTAL_KEYS = [
+            'head_count', 'num_elks', 'num_helpers',
+            'elks_hours', 'helper_hours',
+            'elks_miles', 'helper_miles',
+            'non_cash', 'cash',
+        ]
+
+        sections = []
+        for sec in current.get('sections', []):
+            prior_totals = prior_section_map.get(sec['key'], {})
+            deltas = {}
+            for k in _TOTAL_KEYS:
+                cur_val = sec['totals'].get(k, 0)
+                prev_val = prior_totals.get(k, 0)
+                deltas[k] = cur_val - prev_val
+            sections.append({
+                'key': sec['key'],
+                'label': sec['label'],
+                'totals': sec['totals'],
+                'deltas': deltas,
+            })
+
+        # Grand total deltas
+        grand_deltas = {}
+        for k in _TOTAL_KEYS:
+            cur_val = current['grand_totals'].get(k, 0)
+            prev_val = prior.get('grand_totals', {}).get(k, 0)
+            grand_deltas[k] = cur_val - prev_val
+
+        return {
+            'sections': sections,
+            'grand_totals': current['grand_totals'],
+            'grand_deltas': grand_deltas,
+            'date_from': self.date_from,
+            'date_to': self.date_to,
+            'prior_date_to': prior_date_to,
+        }
+
+    def action_print_meeting_summary(self):
+        """Preview the Meeting Summary report (HTML)."""
+        self.ensure_one()
+        report = self.env.ref(
+            'elkscharity.action_report_meeting_summary'
+        )
+        return report.report_action(self)
+
+    def action_download_meeting_summary_pdf(self):
+        """Download the Meeting Summary report as PDF."""
+        self.ensure_one()
+        report = self.env.ref(
+            'elkscharity.action_report_meeting_summary_pdf'
+        )
+        return report.report_action(self)
+
     def action_print_report(self):
         """Preview the Grand Lodge report (HTML)."""
         self.ensure_one()
@@ -286,6 +391,22 @@ class GrandLodgeReportWizard(models.TransientModel):
         self.ensure_one()
         report = self.env.ref(
             'elkscharity.action_report_grand_lodge_pdf'
+        )
+        return report.report_action(self)
+
+    def action_print_entry_sheet(self):
+        """Preview the GL Website Entry Sheet (HTML)."""
+        self.ensure_one()
+        report = self.env.ref(
+            'elkscharity.action_report_gl_entry_sheet'
+        )
+        return report.report_action(self)
+
+    def action_download_entry_sheet_pdf(self):
+        """Download the GL Website Entry Sheet as PDF."""
+        self.ensure_one()
+        report = self.env.ref(
+            'elkscharity.action_report_gl_entry_sheet_pdf'
         )
         return report.report_action(self)
 

@@ -19,6 +19,33 @@
               action="action_charity_activities"
               sequence="20"/>
 
+    <!-- ── Contributions ───────────────────────────────────── -->
+    <menuitem id="menu_elkscharity_contributions"
+              name="Contributions"
+              parent="menu_elkscharity_root"
+              sequence="25"/>
+
+    <menuitem id="menu_elkscharity_contributions_all"
+              name="All Contributions"
+              parent="menu_elkscharity_contributions"
+              action="action_charity_contributions"
+              sequence="10"/>
+
+    <menuitem id="menu_elkscharity_contributions_pending"
+              name="Pending Review"
+              parent="menu_elkscharity_contributions"
+              action="action_charity_contributions_pending"
+              sequence="20"
+              groups="group_elkscharity_secretary"/>
+
+    <menuitem id="menu_elkscharity_contributions_recurring"
+              name="Recurring Templates"
+              parent="menu_elkscharity_contributions"
+              action="action_charity_contributions_recurring"
+              sequence="30"
+              groups="group_elkscharity_secretary"/>
+
+    <!-- ── Hours ───────────────────────────────────────────── -->
     <menuitem id="menu_elkscharity_hours"
               name="Hours"
               parent="menu_elkscharity_root"
@@ -59,22 +86,11 @@
     <menuitem id="menu_elkscharity_annual_report"
               name="Charity Annual Report"
               parent="menu_elkscharity_reports"
-              action="action_report_charity_annual"
+              action="action_charity_annual_report_wizard"
               sequence="7"
               groups="group_elkscharity_secretary"/>
 
-    <menuitem id="menu_elkscharity_timecard_report"
-              name="Timecard Report"
-              parent="menu_elkscharity_reports"
-              action="action_elks_timecard_report_wizard"
-              sequence="10"/>
-
-    <!-- Also accessible from Attendance → Reporting -->
-    <menuitem id="menu_attendance_timecard_report"
-              name="Payroll Timecards"
-              parent="hr_attendance.menu_hr_attendance_reporting"
-              action="action_elks_timecard_report_wizard"
-              sequence="20"/>
+    <!-- Timecard Report menus moved to elksattendance module -->
 
     <menuitem id="menu_elkscharity_config"
               name="Configuration"

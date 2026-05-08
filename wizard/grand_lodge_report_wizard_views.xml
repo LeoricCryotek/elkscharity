@@ -40,6 +40,17 @@
                 <field name="state" invisible="1"/>
 
                 <footer>
+                    <button string="Meeting Summary"
+                            name="action_print_meeting_summary"
+                            type="object" class="btn-primary"
+                            icon="fa-bar-chart"
+                            invisible="state != 'choose'"
+                            title="Presentation-ready summary with month-over-month changes"/>
+                    <button string="Meeting Summary (PDF)"
+                            name="action_download_meeting_summary_pdf"
+                            type="object" class="btn-secondary"
+                            icon="fa-file-pdf-o"
+                            invisible="state != 'choose'"/>
                     <button string="Preview"
                             name="action_print_report"
                             type="object" class="btn-primary"
@@ -49,6 +60,17 @@
                             name="action_download_pdf"
                             type="object" class="btn-secondary"
                             icon="fa-download"
+                            invisible="state != 'choose'"/>
+                    <button string="GL Entry Sheet"
+                            name="action_print_entry_sheet"
+                            type="object" class="btn-secondary"
+                            icon="fa-list-alt"
+                            invisible="state != 'choose'"
+                            title="Per-line report matching the GL website form"/>
+                    <button string="GL Entry Sheet (PDF)"
+                            name="action_download_entry_sheet_pdf"
+                            type="object" class="btn-secondary"
+                            icon="fa-file-pdf-o"
                             invisible="state != 'choose'"/>
                     <button string="Export CSV (Grand Lodge Format)"
                             name="action_export_csv"

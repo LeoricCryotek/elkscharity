@@ -152,7 +152,7 @@
                                                 <td><span t-field="task.x_event_date"/></td>
                                                 <td><span t-field="task.name"/></td>
                                                 <td class="text-end">
-                                                    <span t-field="task.x_head_count"/>
+                                                    <span t-field="task.x_total_head_count"/>
                                                 </td>
                                                 <td class="text-end">
                                                     <span t-field="task.x_elks_count"/>
@@ -185,7 +185,7 @@
                                                 <td colspan="2"><strong>Annual Total</strong></td>
                                                 <td class="text-end">
                                                     <strong>
-                                                        <t t-esc="sum(cat_tasks.mapped('x_head_count'))"/>
+                                                        <t t-esc="sum(cat_tasks.mapped('x_total_head_count'))"/>
                                                     </strong>
                                                 </td>
                                                 <td class="text-end">

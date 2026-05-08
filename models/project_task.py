@@ -21,7 +21,11 @@ class ProjectTask(models.Model):
     )
     x_head_count = fields.Integer(
         "Participants (Head Count)",
-        help="Total number of people served by this activity.",
+        help="Manual head count for this activity (people served directly).",
+    )
+    x_total_head_count = fields.Integer(
+        "Total Head Count", compute="_compute_totals",
+        help="Manual head count + confirmed contribution head counts.",
     )
     x_recipient_org = fields.Char(
         "Recipient Organization",
@@ -43,7 +47,7 @@ class ProjectTask(models.Model):
         index=True,
     )
 
-    # Roll-ups from validated timesheet lines
+    # Roll-ups from validated timesheet lines + contributions
     x_elks_hours = fields.Float(
         "Elks Hours", compute="_compute_totals",
     )
@@ -75,6 +79,12 @@ class ProjectTask(models.Model):
         default=lambda self: self.env.company.currency_id,
     )
 
+    # Contributions (non-attendance entries)
+    x_contribution_ids = fields.One2many(
+        "elks.charity.contribution", "task_id",
+        string="Contributions",
+    )
+
     @api.depends("project_id", "project_id.x_is_charity_parent")
     def _compute_is_charity(self):
         for rec in self:
@@ -83,6 +93,7 @@ class ProjectTask(models.Model):
             )
 
     @api.depends(
+        "x_head_count",
         "timesheet_ids",
         "timesheet_ids.x_validated",
         "timesheet_ids.x_is_helper",
@@ -90,18 +101,31 @@ class ProjectTask(models.Model):
         "timesheet_ids.x_miles",
         "timesheet_ids.x_cash_value",
         "timesheet_ids.x_non_cash_value",
+        "x_contribution_ids",
+        "x_contribution_ids.state",
+        "x_contribution_ids.cash_value",
+        "x_contribution_ids.non_cash_value",
+        "x_contribution_ids.elks_count",
+        "x_contribution_ids.helper_count",
+        "x_contribution_ids.head_count",
     )
     def _compute_totals(self):
-        """Roll up validated hours / miles / dollars from BOTH:
-          * account.analytic.line (timesheets) and
-          * hr.attendance records tagged with this task.
+        """Roll up validated hours / miles / dollars from THREE sources:
+          * account.analytic.line (timesheets)
+          * hr.attendance records tagged with this task
+          * elks.charity.contribution entries (confirmed)
 
-        Dedupe rule: if both a validated timesheet line AND a validated
-        attendance record exist for the same employee + same date + this
-        task, the attendance record wins (employees who clock in
-        produce attendance; the timesheet line is treated as a duplicate).
+        Dedupe rule for attendance vs timesheets: if both a validated
+        timesheet line AND a validated attendance record exist for the
+        same employee + same date + this task, the attendance record
+        wins (employees who clock in produce attendance; the timesheet
+        line is treated as a duplicate).
+
+        Contributions are additive — they don't overlap with attendance
+        since they represent non-attendance entries (venue, in-kind, etc.).
         """
         Attendance = self.env.get('hr.attendance')
+        Contribution = self.env.get('elks.charity.contribution')
         for rec in self:
             # --- timesheet lines (validated) ---
             ts_validated = rec.timesheet_ids.filtered('x_validated')
@@ -132,6 +156,23 @@ class ProjectTask(models.Model):
             att_elks = att_validated.filtered(lambda a: not a.x_is_helper)
             att_help = att_validated.filtered('x_is_helper')
 
+            # --- confirmed contributions ---
+            contrib_cash = 0.0
+            contrib_non_cash = 0.0
+            contrib_elks = 0
+            contrib_helpers = 0
+            contrib_heads = 0
+            if Contribution is not None and rec.id:
+                contribs = Contribution.sudo().search([
+                    ('task_id', '=', rec.id),
+                    ('state', '=', 'confirmed'),
+                ])
+                contrib_cash = sum(contribs.mapped('cash_value'))
+                contrib_non_cash = sum(contribs.mapped('non_cash_value'))
+                contrib_elks = sum(contribs.mapped('elks_count'))
+                contrib_helpers = sum(contribs.mapped('helper_count'))
+                contrib_heads = sum(contribs.mapped('head_count'))
+
             # Use x_charity_hours when set, else fall back to worked_hours
             rec.x_elks_hours = (
                 sum(ts_elks.mapped('unit_amount'))
@@ -152,16 +193,20 @@ class ProjectTask(models.Model):
             rec.x_elks_count = len(set(
                 ts_elks.mapped('employee_id.id')
                 + att_elks.mapped('employee_id.id')
-            ))
+            )) + contrib_elks
             rec.x_helper_count = len(set(
                 ts_help.mapped('employee_id.id')
                 + att_help.mapped('employee_id.id')
-            ))
+            )) + contrib_helpers
             rec.x_cash_total = (
                 sum(ts_kept.mapped('x_cash_value'))
                 + sum(att_validated.mapped('x_cash_value'))
+                + contrib_cash
             )
             rec.x_non_cash_total = (
                 sum(ts_kept.mapped('x_non_cash_value'))
                 + sum(att_validated.mapped('x_non_cash_value'))
+                + contrib_non_cash
             )
+            # Total head count = manual task-level + confirmed contributions
+            rec.x_total_head_count = rec.x_head_count + contrib_heads

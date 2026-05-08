@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         Charity Contribution — Form
+         ═══════════════════════════════════════════════════════════ -->
+    <record id="view_charity_contribution_form" model="ir.ui.view">
+        <field name="name">elks.charity.contribution.form</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_confirm"
+                            string="Confirm"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Confirm this contribution for reporting?"/>
+                    <button name="action_duplicate_next"
+                            string="Create Next Occurrence"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="not is_recurring or state != 'confirmed'"/>
+                    <button name="action_cancel"
+                            string="Cancel"
+                            type="object"
+                            invisible="state in ('confirmed', 'cancelled')"/>
+                    <button name="action_reset_draft"
+                            string="Reset to Draft"
+                            type="object"
+                            invisible="state != 'confirmed'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="e.g. Sunday venue donation to First Baptist Church"/></h1>
+                    </div>
+                    <group>
+                        <group string="Contribution Details">
+                            <field name="contribution_date"/>
+                            <field name="contribution_type"/>
+                            <field name="task_id" options="{'no_create': True}"/>
+                            <field name="project_id" readonly="1"/>
+                            <field name="charity_category_id" readonly="1"/>
+                            <field name="charity_section" readonly="1"/>
+                            <field name="recipient_org"
+                                   placeholder="e.g. First Baptist Church"/>
+                        </group>
+                        <group string="Values &amp; Counts">
+                            <field name="cash_value"/>
+                            <field name="non_cash_value"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="head_count"/>
+                            <field name="elks_count"/>
+                            <field name="helper_count"/>
+                        </group>
+                    </group>
+
+                    <!-- Recurrence -->
+                    <group string="Recurrence" col="4">
+                        <field name="is_recurring"/>
+                        <field name="recurrence_frequency"
+                               invisible="not is_recurring"
+                               required="is_recurring"/>
+                        <field name="recurrence_end_date"
+                               invisible="not is_recurring"/>
+                        <field name="next_generation_date"
+                               invisible="not is_recurring"
+                               readonly="1"/>
+                    </group>
+
+                    <!-- Template info (for generated entries) -->
+                    <group string="Generation Info"
+                           invisible="not template_id">
+                        <field name="template_id" readonly="1"/>
+                    </group>
+
+                    <!-- Generated entries (for template records) -->
+                    <group string="Generated Entries"
+                           invisible="not is_recurring">
+                        <field name="generated_ids" nolabel="1" readonly="1">
+                            <list>
+                                <field name="contribution_date"/>
+                                <field name="cash_value"/>
+                                <field name="non_cash_value"/>
+                                <field name="state" widget="badge"
+                                       decoration-info="state == 'draft'"
+                                       decoration-success="state == 'confirmed'"
+                                       decoration-muted="state == 'cancelled'"/>
+                            </list>
+                        </field>
+                    </group>
+
+                    <!-- Sign-off info -->
+                    <group string="Sign-Off"
+                           invisible="state == 'draft'">
+                        <group>
+                            <field name="submitted_by"/>
+                        </group>
+                        <group>
+                            <field name="confirmed_by"/>
+                            <field name="confirmed_date"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="notes"
+                                   placeholder="Additional details about this contribution..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         Charity Contribution — List
+         ═══════════════════════════════════════════════════════════ -->
+    <record id="view_charity_contribution_list" model="ir.ui.view">
+        <field name="name">elks.charity.contribution.list</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'cancelled'"
+                  default_order="contribution_date desc">
+                <field name="contribution_date"/>
+                <field name="name"/>
+                <field name="task_id"/>
+                <field name="contribution_type"/>
+                <field name="recipient_org" optional="show"/>
+                <field name="cash_value" sum="Cash Total"/>
+                <field name="non_cash_value" sum="Non-Cash Total"/>
+                <field name="head_count" sum="Head Count" optional="show"/>
+                <field name="elks_count" sum="Elks" optional="show"/>
+                <field name="helper_count" sum="Helpers" optional="show"/>
+                <field name="is_recurring" widget="boolean" optional="hide"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-success="state == 'confirmed'"
+                       decoration-muted="state == 'cancelled'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         Charity Contribution — Search
+         ═══════════════════════════════════════════════════════════ -->
+    <record id="view_charity_contribution_search" model="ir.ui.view">
+        <field name="name">elks.charity.contribution.search</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="task_id"/>
+                <field name="recipient_org"/>
+                <field name="contribution_date"/>
+                <separator/>
+                <filter string="Pending Review" name="pending"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter string="Confirmed" name="confirmed"
+                        domain="[('state', '=', 'confirmed')]"/>
+                <filter string="Recurring Templates" name="recurring"
+                        domain="[('is_recurring', '=', True)]"/>
+                <separator/>
+                <filter string="This Month" name="this_month"
+                        domain="[('contribution_date', '&gt;=', (context_today() - relativedelta(day=1)).strftime('%%Y-%%m-%%d')),
+                                 ('contribution_date', '&lt;=', context_today().strftime('%%Y-%%m-%%d'))]"/>
+                <filter string="This Lodge Year" name="this_year"
+                        domain="[('contribution_date', '&gt;=', '%d-04-01' % (context_today().year if context_today().month &gt;= 4 else context_today().year - 1))]"/>
+                <separator/>
+                <filter string="Group by Category" name="group_category"
+                        context="{'group_by': 'charity_category_id'}"/>
+                <filter string="Group by Task" name="group_task"
+                        context="{'group_by': 'task_id'}"/>
+                <filter string="Group by Type" name="group_type"
+                        context="{'group_by': 'contribution_type'}"/>
+                <filter string="Group by Month" name="group_month"
+                        context="{'group_by': 'contribution_date:month'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         Actions
+         ═══════════════════════════════════════════════════════════ -->
+    <record id="action_charity_contributions" model="ir.actions.act_window">
+        <field name="name">Charity Contributions</field>
+        <field name="res_model">elks.charity.contribution</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_confirmed': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Record a Charity Contribution
+            </p>
+            <p>
+                Log non-attendance contributions: in-kind donations,
+                venue use, cash gifts, supplies, and more. These roll
+                into the Grand Lodge annual report alongside volunteer hours.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_charity_contributions_pending" model="ir.actions.act_window">
+        <field name="name">Pending Contributions</field>
+        <field name="res_model">elks.charity.contribution</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No contributions awaiting review
+            </p>
+            <p>
+                Recurring contributions and new submissions appear
+                here for the Secretary to review and confirm.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_charity_contributions_recurring" model="ir.actions.act_window">
+        <field name="name">Recurring Contributions</field>
+        <field name="res_model">elks.charity.contribution</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_recurring': 1}</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         Add Contributions tab to Charity Task form
+         ═══════════════════════════════════════════════════════════ -->
+    <record id="view_task_form_contributions" model="ir.ui.view">
+        <field name="name">project.task.form.contributions</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_form2"/>
+        <field name="priority">25</field>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Contributions" name="contributions"
+                      invisible="not x_is_charity_activity">
+                    <field name="x_contribution_ids" nolabel="1"
+                           context="{'default_task_id': id}">
+                        <list>
+                            <field name="contribution_date"/>
+                            <field name="name"/>
+                            <field name="contribution_type"/>
+                            <field name="cash_value" sum="Cash"/>
+                            <field name="non_cash_value" sum="Non-Cash"/>
+                            <field name="head_count" sum="People"/>
+                            <field name="state" widget="badge"
+                                   decoration-info="state == 'draft'"
+                                   decoration-success="state == 'confirmed'"
+                                   decoration-muted="state == 'cancelled'"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

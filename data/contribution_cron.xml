@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- ═══════════════════════════════════════════════════════════
+         Cron: Generate Recurring Charity Contributions
+         Runs daily at 6:00 AM.  Creates draft entries from confirmed
+         recurring templates whose next_generation_date has arrived.
+         Secretary reviews and confirms each generated entry.
+         ═══════════════════════════════════════════════════════════ -->
+    <record id="cron_generate_recurring_contributions" model="ir.cron">
+        <field name="name">Charity: Generate Recurring Contributions</field>
+        <field name="model_id" ref="model_elks_charity_contribution"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_generate_recurring()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
+
+</odoo>

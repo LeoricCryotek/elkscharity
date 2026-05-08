@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- HTML preview report -->
+    <record id="action_report_gl_entry_sheet" model="ir.actions.report">
+        <field name="name">GL Website Entry Sheet</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">elkscharity.report_gl_entry_sheet</field>
+        <field name="report_file">elkscharity.report_gl_entry_sheet</field>
+        <field name="print_report_name">
+            'GL_Entry_Sheet_%s_%s' % (object.date_from, object.date_to)
+        </field>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- PDF download report -->
+    <record id="action_report_gl_entry_sheet_pdf" model="ir.actions.report">
+        <field name="name">GL Website Entry Sheet (PDF)</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">elkscharity.report_gl_entry_sheet</field>
+        <field name="report_file">elkscharity.report_gl_entry_sheet</field>
+        <field name="print_report_name">
+            'GL_Entry_Sheet_%s_%s' % (object.date_from, object.date_to)
+        </field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- QWeb template — one card per line item, matching the GL website form -->
+    <template id="report_gl_entry_sheet">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="wizard">
+                <t t-set="settings"
+                   t-value="wizard.env['elks.lodge.settings'].sudo().search([], limit=1)"/>
+
+                <div class="page" style="font-family: Arial, sans-serif; font-size: 11px;">
+                    <!-- ===== LODGE HEADER ===== -->
+                    <table style="width: 100%; margin-bottom: 10px; border: none;">
+                        <tr>
+                            <td style="width: 15%; text-align: center; vertical-align: middle; border: none; padding: 0;">
+                                <t t-if="settings and settings.logo_primary">
+                                    <img t-att-src="image_data_uri(settings.logo_primary)"
+                                         style="max-height: 70px; max-width: 90px;"
+                                         alt="Elks USA"/>
+                                </t>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle; border: none; padding: 0 10px;">
+                                <h2 style="font-size: 20px; margin: 0 0 2px 0; color: #333;">
+                                    <t t-if="settings and settings.name">
+                                        <span t-field="settings.name"/>
+                                    </t>
+                                    <t t-else="">Elks Lodge</t>
+                                    <t t-if="settings and settings.lodge_number">
+                                        #<span t-field="settings.lodge_number"/>
+                                    </t>
+                                </h2>
+                                <p style="color: #777; font-size: 10px; margin: 0;">
+                                    Benevolent and Protective Order of Elks
+                                </p>
+                                <h3 style="font-size: 16px; margin: 6px 0 0 0; color: #003366;">
+                                    GL Website Entry Sheet
+                                </h3>
+                                <p style="font-size: 11px; color: #333; margin: 4px 0 0 0;">
+                                    <strong>Period:</strong>
+                                    <t t-out="wizard.date_from"/> to
+                                    <t t-out="wizard.date_to"/>
+                                </p>
+                            </td>
+                            <td style="width: 15%; text-align: center; vertical-align: middle; border: none; padding: 0;">
+                                <t t-if="settings and settings.logo_lodge">
+                                    <img t-att-src="image_data_uri(settings.logo_lodge)"
+                                         style="max-height: 70px; max-width: 90px;"
+                                         alt="Lodge Logo"/>
+                                </t>
+                            </td>
+                        </tr>
+                    </table>
+                    <div style="border-top: 2px solid #003366; margin-bottom: 12px;"/>
+
+                    <p style="font-size: 10px; color: #555; margin-bottom: 14px;">
+                        Each entry below matches one line on the Grand Lodge
+                        Charitable Giving website form. Read across and enter
+                        the values in order.
+                    </p>
+
+                    <t t-set="result" t-value="wizard._get_report_data()"/>
+
+                    <t t-if="not result['sections']">
+                        <p class="text-muted">
+                            No charitable activity found for the selected
+                            period and filters.
+                        </p>
+                    </t>
+
+                    <!-- Entry counter -->
+                    <t t-set="entry_num" t-value="0"/>
+
+                    <t t-foreach="result['sections']" t-as="section">
+                        <t t-foreach="section['categories']" t-as="cat_data">
+                            <t t-foreach="cat_data['events']" t-as="event">
+                                <t t-set="entry_num" t-value="entry_num + 1"/>
+
+                                <!-- ===== ONE CARD PER ENTRY ===== -->
+                                <div style="border: 1px solid #999;
+                                            border-radius: 4px;
+                                            padding: 8px 12px;
+                                            margin-bottom: 10px;
+                                            page-break-inside: avoid;">
+
+                                    <!-- Card header: entry number + program -->
+                                    <div style="background-color: #003366; color: white;
+                                                padding: 4px 8px; margin: -8px -12px 8px -12px;
+                                                border-radius: 3px 3px 0 0;
+                                                font-size: 12px; font-weight: bold;">
+                                        Entry #<t t-out="entry_num"/>
+                                        <span style="float: right; font-weight: normal; font-size: 10px;">
+                                            <t t-out="section['label']"/>
+                                        </span>
+                                    </div>
+
+                                    <!-- Two-column layout for form fields -->
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                        <tr>
+                                            <td style="width: 50%; padding: 3px 6px; vertical-align: top;">
+                                                <strong style="color: #003366;">Event Date:</strong>
+                                                <span style="margin-left: 6px;">
+                                                    <t t-out="event['event_date']"/>
+                                                </span>
+                                            </td>
+                                            <td style="width: 50%; padding: 3px 6px; vertical-align: top;">
+                                                <strong style="color: #003366;">Program Type:</strong>
+                                                <span style="margin-left: 6px;">
+                                                    [<t t-out="cat_data['category'].code"/>]
+                                                    <t t-out="cat_data['category'].name
+                                                              if hasattr(cat_data['category'], 'name')
+                                                              else cat_data['category'].display_name"/>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2" style="padding: 3px 6px;">
+                                                <strong style="color: #003366;">Program Name:</strong>
+                                                <span style="margin-left: 6px;">
+                                                    <t t-out="event['program_name']"/>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <!-- Divider -->
+                                    <div style="border-top: 1px dashed #ccc; margin: 4px 0;"/>
+
+                                    <!-- Data fields in a grid matching the GL website order -->
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                        <tr>
+                                            <td style="width: 25%; padding: 2px 6px;">
+                                                <strong>Head Count:</strong>
+                                            </td>
+                                            <td style="width: 25%; padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                <t t-out="event['head_count']"/>
+                                            </td>
+                                            <td style="width: 25%; padding: 2px 6px;">
+                                                <strong>Number of Elks:</strong>
+                                            </td>
+                                            <td style="width: 25%; padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                <t t-out="event['num_elks']"/>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 2px 6px;">
+                                                <strong>Number of Non-Elks:</strong>
+                                            </td>
+                                            <td style="padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                <t t-out="event['num_helpers']"/>
+                                            </td>
+                                            <td style="padding: 2px 6px;">
+                                                <strong>Elk Hours:</strong>
+                                            </td>
+                                            <td style="padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                <t t-out="'%.0f' % event['elks_hours']"/>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 2px 6px;">
+                                                <strong>Helper Hours:</strong>
+                                            </td>
+                                            <td style="padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                <t t-out="'%.0f' % event['helper_hours']"/>
+                                            </td>
+                                            <td style="padding: 2px 6px;">
+                                                <strong>Elk Mileage:</strong>
+                                            </td>
+                                            <td style="padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                <t t-out="'%.0f' % event['elks_miles']"/>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 2px 6px;">
+                                                <strong>Helper Mileage:</strong>
+                                            </td>
+                                            <td style="padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                <t t-out="'%.0f' % event['helper_miles']"/>
+                                            </td>
+                                            <td style="padding: 2px 6px;">
+                                                <strong>Non-Cash:</strong>
+                                            </td>
+                                            <td style="padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                $<t t-out="'%.2f' % event['non_cash']"/>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 2px 6px;">
+                                                <strong>Cash:</strong>
+                                            </td>
+                                            <td style="padding: 2px 6px; font-size: 13px; font-weight: bold;">
+                                                $<t t-out="'%.2f' % event['cash']"/>
+                                            </td>
+                                            <td colspan="2" style="padding: 2px 6px; text-align: right;">
+                                                <span style="font-size: 9px; color: #888;">
+                                                    &#x2610; entered
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </t>
+                        </t>
+                    </t>
+
+                    <!-- Summary footer -->
+                    <t t-if="result['sections']">
+                        <div style="margin-top: 16px; padding: 8px 12px;
+                                    border-top: 3px double #333;
+                                    font-size: 11px;">
+                            <strong>Total entries: <t t-out="entry_num"/></strong>
+                            <t t-set="gt" t-value="result['grand_totals']"/>
+                            <span style="float: right;">
+                                Grand Total —
+                                Head Count: <t t-out="gt['head_count']"/> |
+                                Elks: <t t-out="gt['num_elks']"/> |
+                                Non-Elks: <t t-out="gt['num_helpers']"/> |
+                                Elk Hrs: <t t-out="'%.0f' % gt['elks_hours']"/> |
+                                Helper Hrs: <t t-out="'%.0f' % gt['helper_hours']"/> |
+                                Elk Mi: <t t-out="'%.0f' % gt['elks_miles']"/> |
+                                Helper Mi: <t t-out="'%.0f' % gt['helper_miles']"/> |
+                                Non-Cash: $<t t-out="'%.2f' % gt['non_cash']"/> |
+                                Cash: $<t t-out="'%.2f' % gt['cash']"/>
+                            </span>
+                        </div>
+                    </t>
+
+                    <div style="margin-top: 12px; text-align: center; color: #999; font-size: 9px;">
+                        Generated from the Elks Lodge management system.
+                        Only <strong>validated</strong> hours and
+                        <strong>confirmed</strong> contributions are included.
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+</odoo>

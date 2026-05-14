@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Elks Charity — Volunteer Hours, Activities & Grand Lodge Report",
-    "version": "19.0.2.0",
+    "version": "19.0.2.1",
     "category": "Productivity",
     "summary": "Track volunteer hours and charitable activities per "
                "Grand Lodge categories (1001–9999). Uses Odoo Projects "
@@ -72,8 +72,14 @@ base, mail, project, hr_timesheet, calendar, elkscontacts, elksfrs
         "report/gl_entry_sheet_report.xml",
         "report/meeting_summary_report.xml",
         # report/timecard_report.xml moved to elksattendance in 19.0.1.9
+        "views/charity_dashboard_views.xml",
         "views/elkscharity_menus.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "elkscharity/static/src/scss/charity_dashboard.scss",
+        ],
+    },
     "installable": True,
     "application": True,
 }

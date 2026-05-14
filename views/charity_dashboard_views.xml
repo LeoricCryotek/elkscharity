@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============================================================
+         Charity Dashboard — widget-style kanban per category
+         Default landing for the Elks Charity app.
+
+         One card per (lodge_year, charity category) sorted by GL code.
+         Each card shows current-year totals, prior-year totals, and
+         a coloured delta arrow so lodges can compete to beat last year.
+         ============================================================ -->
+
+    <!-- ────────── Search view ────────── -->
+    <record id="view_charity_dashboard_search" model="ir.ui.view">
+        <field name="name">elks.charity.dashboard.search</field>
+        <field name="model">elks.charity.dashboard</field>
+        <field name="arch" type="xml">
+            <search string="Charity Dashboard">
+                <field name="category_id"/>
+                <field name="category_code"/>
+                <field name="lodge_year"/>
+                <field name="gl_section"/>
+                <separator/>
+                <filter name="filter_current_lodge_year"
+                        string="Current Lodge Year"
+                        domain="[('lodge_year', '=', context.get('current_lodge_year'))]"/>
+                <separator/>
+                <filter name="filter_has_activity" string="Has Activity"
+                        domain="[('activity_count', '&gt;', 0)]"/>
+                <filter name="filter_no_activity" string="No Activity (Opportunities)"
+                        domain="[('activity_count', '=', 0)]"/>
+                <separator/>
+                <filter name="filter_growing" string="Up vs. Prior Year"
+                        domain="[('trend_total_hours', '=', 'up')]"/>
+                <filter name="filter_declining" string="Down vs. Prior Year"
+                        domain="[('trend_total_hours', '=', 'down')]"/>
+                <group>
+                    <filter name="group_by_lodge_year" string="Lodge Year"
+                            context="{'group_by': 'lodge_year'}"/>
+                    <filter name="group_by_section" string="GL Section"
+                            context="{'group_by': 'gl_section'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ────────── Kanban (widget-style cards) ────────── -->
+    <record id="view_charity_dashboard_kanban" model="ir.ui.view">
+        <field name="name">elks.charity.dashboard.kanban</field>
+        <field name="model">elks.charity.dashboard</field>
+        <field name="arch" type="xml">
+            <kanban default_order="category_code, lodge_year"
+                    class="o_kanban_dashboard o_elkscharity_dashboard"
+                    create="false" edit="false" delete="false"
+                    records_draggable="false" group_create="false">
+                <field name="id"/>
+                <field name="category_id"/>
+                <field name="category_code"/>
+                <field name="category_name"/>
+                <field name="gl_section"/>
+                <field name="lodge_year"/>
+                <field name="prior_lodge_year"/>
+                <field name="elks_hours"/>
+                <field name="helper_hours"/>
+                <field name="total_hours"/>
+                <field name="elks_unique"/>
+                <field name="helper_unique"/>
+                <field name="elks_headcount"/>
+                <field name="helper_headcount"/>
+                <field name="cash_raised"/>
+                <field name="non_cash_raised"/>
+                <field name="activity_count"/>
+                <field name="prior_total_hours"/>
+                <field name="prior_elks_unique"/>
+                <field name="prior_helper_unique"/>
+                <field name="prior_cash_raised"/>
+                <field name="prior_non_cash_raised"/>
+                <field name="delta_total_hours"/>
+                <field name="delta_cash_raised"/>
+                <field name="trend_total_hours"/>
+                <field name="trend_cash_raised"/>
+                <field name="currency_id"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div t-attf-class="oe_kanban_card oe_kanban_global_click o_elkscharity_card #{record.activity_count.raw_value === 0 ? 'o_elkscharity_card_empty' : ''}">
+                            <div class="o_kanban_card_header">
+                                <div class="o_kanban_card_header_title">
+                                    <div class="o_primary">
+                                        <span class="o_elkscharity_code">
+                                            <t t-esc="record.category_code.value"/>
+                                        </span>
+                                        <span class="o_elkscharity_name">
+                                            <t t-esc="record.category_name.value"/>
+                                        </span>
+                                    </div>
+                                    <div class="o_secondary text-muted">
+                                        <field name="gl_section"/>
+                                        <span class="ms-2">·</span>
+                                        <span class="ms-2">Lodge Year <t t-esc="record.lodge_year.value"/></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="container o_kanban_card_content o_elkscharity_metrics">
+                                <!-- HOURS -->
+                                <div class="row mt-2">
+                                    <div class="col-7">
+                                        <div class="o_metric_label">Total Hours</div>
+                                        <div class="o_metric_value">
+                                            <field name="total_hours" widget="float_time"/>
+                                        </div>
+                                        <div class="text-muted small">
+                                            Elks <field name="elks_hours" widget="float_time"/>
+                                            · Helpers <field name="helper_hours" widget="float_time"/>
+                                        </div>
+                                    </div>
+                                    <div class="col-5 text-end">
+                                        <div class="o_metric_label">vs. <t t-esc="record.prior_lodge_year.value or '—'"/></div>
+                                        <div t-attf-class="o_metric_delta o_trend_#{record.trend_total_hours.raw_value}">
+                                            <t t-if="record.trend_total_hours.raw_value === 'up'">
+                                                <i class="fa fa-arrow-up" title="Up vs. prior year" role="img" aria-label="Up vs. prior year"/>
+                                            </t>
+                                            <t t-if="record.trend_total_hours.raw_value === 'down'">
+                                                <i class="fa fa-arrow-down" title="Down vs. prior year" role="img" aria-label="Down vs. prior year"/>
+                                            </t>
+                                            <t t-if="record.trend_total_hours.raw_value === 'flat'">
+                                                <i class="fa fa-minus" title="No change vs. prior year" role="img" aria-label="No change vs. prior year"/>
+                                            </t>
+                                            <field name="delta_total_hours" widget="float_time"/>
+                                        </div>
+                                        <div class="text-muted small">
+                                            Prior <field name="prior_total_hours" widget="float_time"/>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- PARTICIPANTS -->
+                                <div class="row mt-3">
+                                    <div class="col-6">
+                                        <div class="o_metric_label">Unique Elks</div>
+                                        <div class="o_metric_value">
+                                            <field name="elks_unique"/>
+                                            <span class="text-muted small ms-1">
+                                                (prior <t t-esc="record.prior_elks_unique.value"/>)
+                                            </span>
+                                        </div>
+                                        <div class="text-muted small">
+                                            Head count <field name="elks_headcount"/>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="o_metric_label">Unique Helpers</div>
+                                        <div class="o_metric_value">
+                                            <field name="helper_unique"/>
+                                            <span class="text-muted small ms-1">
+                                                (prior <t t-esc="record.prior_helper_unique.value"/>)
+                                            </span>
+                                        </div>
+                                        <div class="text-muted small">
+                                            Head count <field name="helper_headcount"/>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- DOLLARS -->
+                                <div class="row mt-3">
+                                    <div class="col-7">
+                                        <div class="o_metric_label">$ Raised</div>
+                                        <div class="o_metric_value">
+                                            <field name="cash_raised" widget="monetary"
+                                                   options="{'currency_field': 'currency_id'}"/>
+                                        </div>
+                                        <div class="text-muted small">
+                                            Non-$ <field name="non_cash_raised" widget="monetary"
+                                                          options="{'currency_field': 'currency_id'}"/>
+                                        </div>
+                                    </div>
+                                    <div class="col-5 text-end">
+                                        <div class="o_metric_label">vs. prior</div>
+                                        <div t-attf-class="o_metric_delta o_trend_#{record.trend_cash_raised.raw_value}">
+                                            <t t-if="record.trend_cash_raised.raw_value === 'up'">
+                                                <i class="fa fa-arrow-up" title="$ raised up vs. prior year" role="img" aria-label="$ raised up vs. prior year"/>
+                                            </t>
+                                            <t t-if="record.trend_cash_raised.raw_value === 'down'">
+                                                <i class="fa fa-arrow-down" title="$ raised down vs. prior year" role="img" aria-label="$ raised down vs. prior year"/>
+                                            </t>
+                                            <t t-if="record.trend_cash_raised.raw_value === 'flat'">
+                                                <i class="fa fa-minus" title="$ raised flat vs. prior year" role="img" aria-label="$ raised flat vs. prior year"/>
+                                            </t>
+                                            <field name="delta_cash_raised" widget="monetary"
+                                                   options="{'currency_field': 'currency_id'}"/>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- DRILL-DOWN -->
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <div class="o_elkscharity_footer">
+                                            <span class="badge text-bg-light">
+                                                <field name="activity_count"/>
+                                                <span class="ms-1">activities</span>
+                                            </span>
+                                            <button type="object"
+                                                    name="action_open_category_activities"
+                                                    class="btn btn-sm btn-primary float-end">
+                                                Open Activities
+                                            </button>
+                                            <button type="object"
+                                                    name="action_open_category_hours"
+                                                    class="btn btn-sm btn-secondary float-end me-2">
+                                                Hours
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- ────────── Pivot view (alternate analysis) ────────── -->
+    <record id="view_charity_dashboard_pivot" model="ir.ui.view">
+        <field name="name">elks.charity.dashboard.pivot</field>
+        <field name="model">elks.charity.dashboard</field>
+        <field name="arch" type="xml">
+            <pivot string="Charity Dashboard">
+                <field name="category_id" type="row"/>
+                <field name="lodge_year" type="col"/>
+                <field name="total_hours" type="measure"/>
+                <field name="elks_unique" type="measure"/>
+                <field name="helper_unique" type="measure"/>
+                <field name="cash_raised" type="measure"/>
+                <field name="non_cash_raised" type="measure"/>
+                <field name="activity_count" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- ────────── List view (alternate, sorted by code) ────────── -->
+    <record id="view_charity_dashboard_list" model="ir.ui.view">
+        <field name="name">elks.charity.dashboard.list</field>
+        <field name="model">elks.charity.dashboard</field>
+        <field name="arch" type="xml">
+            <list string="Charity Dashboard"
+                  default_order="category_code, lodge_year"
+                  create="false" edit="false" delete="false">
+                <field name="category_code"/>
+                <field name="category_name"/>
+                <field name="gl_section"/>
+                <field name="lodge_year"/>
+                <field name="activity_count"/>
+                <field name="elks_unique" string="# Elks (uniq)" sum="Total"/>
+                <field name="helper_unique" string="# Helpers (uniq)" sum="Total"/>
+                <field name="elks_headcount" string="Elks HC" sum="Total"/>
+                <field name="helper_headcount" string="Helper HC" sum="Total"/>
+                <field name="total_hours" widget="float_time" sum="Total"/>
+                <field name="cash_raised" sum="Total"/>
+                <field name="non_cash_raised" sum="Total"/>
+                <field name="prior_total_hours" widget="float_time"
+                       string="Prior Hours" optional="show"/>
+                <field name="prior_cash_raised" string="Prior $" optional="show"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ────────── Action ────────── -->
+    <record id="action_charity_dashboard" model="ir.actions.act_window">
+        <field name="name">Charity Dashboard</field>
+        <field name="res_model">elks.charity.dashboard</field>
+        <field name="view_mode">kanban,list,pivot</field>
+        <field name="search_view_id" ref="view_charity_dashboard_search"/>
+        <!-- Default landing context is set by action_open_dashboard() in
+             models/charity_dashboard.py which injects current_lodge_year
+             and search_default_filter_current_lodge_year=1. -->
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No charity activity yet
+            </p>
+            <p>
+                As volunteers log validated hours and confirmed contributions
+                are recorded, this dashboard fills with one widget per Grand
+                Lodge category (1001 – 9999).  Each card compares the current
+                lodge year to last year so the lodge can compete to do more.
+            </p>
+        </field>
+    </record>
+</odoo>

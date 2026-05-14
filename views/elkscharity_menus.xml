@@ -1,11 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- ────────── Open-Dashboard Server Action ──────────
+         Wraps action_charity_dashboard with a Python call that
+         injects the current lodge year into the search panel.   -->
+    <record id="action_charity_dashboard_landing" model="ir.actions.server">
+        <field name="name">Charity Dashboard</field>
+        <field name="model_id" ref="model_elks_charity_dashboard"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_dashboard()</field>
+    </record>
+
     <!-- Root: Elks Charity -->
     <menuitem id="menu_elkscharity_root"
               name="Elks Charity"
               sequence="55"
+              action="action_charity_dashboard_landing"
               web_icon="elkscharity,static/description/icon.png"
               groups="group_elkscharity_user"/>
+
+    <menuitem id="menu_elkscharity_dashboard"
+              name="Dashboard"
+              parent="menu_elkscharity_root"
+              action="action_charity_dashboard_landing"
+              sequence="5"/>
 
     <menuitem id="menu_elkscharity_projects"
               name="Charity Projects"

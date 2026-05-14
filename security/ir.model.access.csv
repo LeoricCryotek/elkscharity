@@ -10,3 +10,5 @@ access_charity_hours_report_user,elks.charity.hours.report.user,model_elks_chari
 access_charity_hours_report_sec,elks.charity.hours.report.sec,model_elks_charity_hours_report,group_elkscharity_secretary,1,0,0,0
 access_charity_contribution_user,elks.charity.contribution.user,model_elks_charity_contribution,group_elkscharity_user,1,1,1,0
 access_charity_contribution_sec,elks.charity.contribution.sec,model_elks_charity_contribution,group_elkscharity_secretary,1,1,1,1
+access_charity_dashboard_user,elks.charity.dashboard.user,model_elks_charity_dashboard,group_elkscharity_user,1,0,0,0
+access_charity_dashboard_sec,elks.charity.dashboard.sec,model_elks_charity_dashboard,group_elkscharity_secretary,1,0,0,0

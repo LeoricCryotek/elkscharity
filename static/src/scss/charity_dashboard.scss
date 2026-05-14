@@ -1,0 +1,100 @@
+// Elks Charity Dashboard — widget-style kanban cards.
+// One card per (lodge year × GL charity category), sorted by code.
+
+.o_elkscharity_dashboard {
+    .o_elkscharity_card {
+        width: 360px;
+        margin: 8px;
+        padding: 0;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        background: #ffffff;
+
+        &.o_elkscharity_card_empty {
+            opacity: 0.6;
+            background: #f8f9fa;
+        }
+
+        .o_kanban_card_header {
+            padding: 12px 16px 8px 16px;
+            border-bottom: 1px solid #e9ecef;
+            background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+            border-radius: 8px 8px 0 0;
+        }
+
+        .o_kanban_card_content {
+            padding: 12px 16px 16px 16px;
+        }
+
+        .o_elkscharity_code {
+            display: inline-block;
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #714B67;          // Odoo purple
+            background: rgba(113, 75, 103, 0.08);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 8px;
+        }
+
+        .o_elkscharity_name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .o_secondary {
+            font-size: 0.78rem;
+            margin-top: 2px;
+        }
+
+        .o_metric_label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6c757d;
+            font-weight: 600;
+        }
+
+        .o_metric_value {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #212529;
+            line-height: 1.2;
+        }
+
+        .o_metric_delta {
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1.2;
+
+            i.fa {
+                margin-right: 4px;
+            }
+
+            &.o_trend_up {
+                color: #198754;        // bootstrap success
+            }
+            &.o_trend_down {
+                color: #dc3545;        // bootstrap danger
+            }
+            &.o_trend_flat {
+                color: #6c757d;
+            }
+        }
+
+        .o_elkscharity_footer {
+            padding-top: 8px;
+            border-top: 1px solid #f1f3f5;
+            display: flex;
+            align-items: center;
+
+            .badge {
+                font-weight: 500;
+            }
+
+            .btn {
+                font-size: 0.78rem;
+            }
+        }
+    }
+}

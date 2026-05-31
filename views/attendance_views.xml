@@ -15,9 +15,17 @@
                                options="{'no_create': True}"/>
                         <field name="x_charity_category_id" readonly="1"
                                invisible="not x_charity_task_id"/>
-                        <field name="x_charity_hours"
-                               invisible="not x_charity_task_id"
-                               widget="float_time"/>
+                        <label for="x_charity_hours"
+                               invisible="not x_charity_task_id"/>
+                        <div invisible="not x_charity_task_id"
+                             class="o_row">
+                            <field name="x_charity_hours"
+                                   widget="float_time" nolabel="1"/>
+                            <button name="action_reset_charity_hours_to_raw"
+                                    type="object" class="btn-link"
+                                    icon="fa-refresh"
+                                    title="Recompute from clock-in to clock-out (no break deduction)"/>
+                        </div>
                         <field name="x_is_helper"
                                invisible="not x_charity_task_id"/>
                         <field name="x_miles"
@@ -129,6 +137,30 @@
             ('x_is_charity_attendance', '=', True),
             ('x_validated', '=', False),
         ]</field>
+    </record>
+
+    <!-- Bulk: reset charity hours to raw clock-in→clock-out duration
+         (for historical records that got the old worked_hours default
+         and are now undercounted because Odoo subtracted lunch breaks). -->
+    <record id="action_bulk_reset_charity_hours" model="ir.actions.server">
+        <field name="name">Reset Charity Hours to Clock Duration</field>
+        <field name="model_id" ref="hr_attendance.model_hr_attendance"/>
+        <field name="binding_model_id" ref="hr_attendance.model_hr_attendance"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+charity_recs = records.filtered('x_charity_task_id')
+charity_recs.action_reset_charity_hours_to_raw()
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Charity Hours Recomputed',
+        'message': '%d charity-tagged record(s) reset to raw clock duration.' % len(charity_recs),
+        'type': 'success',
+    },
+}
+        </field>
     </record>
 
     <!-- Bulk validation server action -->

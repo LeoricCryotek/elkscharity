@@ -173,14 +173,23 @@ class ProjectTask(models.Model):
                 contrib_helpers = sum(contribs.mapped('helper_count'))
                 contrib_heads = sum(contribs.mapped('head_count'))
 
-            # Use x_charity_hours when set, else fall back to worked_hours
+            # Use x_charity_hours when set; otherwise fall back to the
+            # raw clock-in → clock-out duration (NOT worked_hours, which
+            # subtracts unpaid breaks defined in the resource calendar
+            # and would under-count volunteer time).
+            def _att_hours(a):
+                if a.x_charity_hours:
+                    return a.x_charity_hours
+                if a.check_in and a.check_out:
+                    return (a.check_out - a.check_in).total_seconds() / 3600.0
+                return 0.0
             rec.x_elks_hours = (
                 sum(ts_elks.mapped('unit_amount'))
-                + sum(a.x_charity_hours or a.worked_hours for a in att_elks)
+                + sum(_att_hours(a) for a in att_elks)
             )
             rec.x_helper_hours = (
                 sum(ts_help.mapped('unit_amount'))
-                + sum(a.x_charity_hours or a.worked_hours for a in att_help)
+                + sum(_att_hours(a) for a in att_help)
             )
             rec.x_elks_miles = (
                 sum(ts_elks.mapped('x_miles'))

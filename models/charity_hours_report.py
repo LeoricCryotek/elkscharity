@@ -83,8 +83,13 @@ class ElksCharityHoursReport(models.Model):
                     pt.name                             AS description,
                     CASE
                         WHEN COALESCE(ha.x_charity_hours, 0) > 0
-                        THEN ha.x_charity_hours
-                        ELSE ha.worked_hours
+                            THEN ha.x_charity_hours
+                        WHEN ha.check_in IS NOT NULL
+                             AND ha.check_out IS NOT NULL
+                            THEN EXTRACT(EPOCH FROM
+                                    (ha.check_out - ha.check_in))
+                                 / 3600.0
+                        ELSE COALESCE(ha.worked_hours, 0)
                     END                                 AS hours,
                     COALESCE(ha.x_is_helper, FALSE)     AS is_helper,
                     COALESCE(ha.x_miles, 0)             AS miles,

@@ -21,6 +21,7 @@ and the timesheet duplicate is excluded from the totals.
 import datetime
 
 from odoo import api, fields, models, tools
+from odoo.tools.safe_eval import safe_eval
 
 
 def _current_lodge_year():
@@ -271,14 +272,26 @@ class ElksCharityDashboard(models.Model):
         action = self.env["ir.actions.act_window"]._for_xml_id(
             "elkscharity.action_charity_dashboard"
         )
-        action["context"] = dict(
-            action.get("context") or {},
+        # ir.actions.act_window stores `context` as a Python-source
+        # string (e.g. "{'default_x': 1}"). Eval it to a dict before
+        # merging — passing a string directly to dict() raises
+        # "dictionary update sequence element ... length 1; 2 required".
+        raw_ctx = action.get("context") or {}
+        if isinstance(raw_ctx, str):
+            try:
+                base_ctx = safe_eval(raw_ctx) or {}
+            except Exception:
+                base_ctx = {}
+        else:
+            base_ctx = dict(raw_ctx)
+        base_ctx.update(
             current_lodge_year=_current_lodge_year(),
             # Activate the "Current Lodge Year" named filter so only
             # this year's cards show by default.  User can clear it
             # from the search bar to see all years.
             search_default_filter_current_lodge_year=1,
         )
+        action["context"] = base_ctx
         return action
 
     # ------------------------------------------------------------------
@@ -378,15 +391,24 @@ class ElksCharityDashboard(models.Model):
                     WHERE cat.active = TRUE
                 ),
                 deduped_lines AS (
-                    -- (a) Validated charity-tagged attendance rows
+                    -- (a) Validated charity-tagged attendance rows.
+                    --     Hours = explicit x_charity_hours when set,
+                    --     otherwise the raw clock-in → clock-out
+                    --     duration (NOT worked_hours, which subtracts
+                    --     resource-calendar lunch breaks).
                     SELECT
                         pt.x_charity_category_id   AS category_id,
                         pp.x_lodge_year            AS lodge_year,
                         ha.employee_id             AS employee_id,
                         CASE
                             WHEN COALESCE(ha.x_charity_hours, 0) > 0
-                            THEN ha.x_charity_hours
-                            ELSE ha.worked_hours
+                                THEN ha.x_charity_hours
+                            WHEN ha.check_in IS NOT NULL
+                                 AND ha.check_out IS NOT NULL
+                                THEN EXTRACT(EPOCH FROM
+                                        (ha.check_out - ha.check_in))
+                                     / 3600.0
+                            ELSE COALESCE(ha.worked_hours, 0)
                         END                        AS hours,
                         COALESCE(ha.x_is_helper, FALSE)  AS is_helper,
                         COALESCE(ha.x_miles, 0)          AS miles,

@@ -93,11 +93,38 @@ class HrAttendance(models.Model):
                     "'%(project)s'.  The lodge year has been wrapped up."
                 ) % {'project': proj.name})
 
-    @api.onchange("x_charity_task_id")
+    @api.onchange("x_charity_task_id", "check_in", "check_out")
     def _onchange_charity_task(self):
-        """Default charity hours to the full worked time when a task is selected."""
+        """Default charity hours to the raw clock-in → clock-out duration
+        when a charity task is selected.
+
+        We deliberately do NOT use ``worked_hours`` here — Odoo computes
+        that field by subtracting unpaid breaks defined in the employee's
+        resource calendar (e.g. lunch).  Volunteers don't take unpaid
+        lunch breaks while volunteering, so 11 AM → 3 PM should be 4 h
+        on the GL report, not 3 h.
+        """
         if self.x_charity_task_id and not self.x_charity_hours:
-            self.x_charity_hours = self.worked_hours or 0.0
+            self.x_charity_hours = self._compute_raw_charity_hours()
+
+    def _compute_raw_charity_hours(self):
+        """Return the raw clock-in to clock-out duration in hours,
+        with no break/lunch deduction.  Used as the default for
+        ``x_charity_hours`` and as the fallback when that field is
+        not explicitly set on a validated attendance record."""
+        self.ensure_one()
+        if self.check_in and self.check_out:
+            delta = self.check_out - self.check_in
+            return delta.total_seconds() / 3600.0
+        return 0.0
+
+    def action_reset_charity_hours_to_raw(self):
+        """Recompute ``x_charity_hours`` from clock-in/clock-out for
+        every record in self.  Use this to fix historical attendance
+        rows that got the old worked_hours-based default."""
+        for rec in self:
+            if rec.x_charity_task_id:
+                rec.x_charity_hours = rec._compute_raw_charity_hours()
 
     # ------------------------------------------------------------------
     # Validation actions

@@ -24,10 +24,6 @@
                         string="Current Lodge Year"
                         domain="[('lodge_year', '=', context.get('current_lodge_year'))]"/>
                 <separator/>
-                <filter name="filter_has_activity" string="Has Activity"
-                        domain="[('activity_count', '&gt;', 0)]"/>
-                <filter name="filter_no_activity" string="No Activity (Opportunities)"
-                        domain="[('activity_count', '=', 0)]"/>
                 <separator/>
                 <filter name="filter_growing" string="Up vs. Prior Year"
                         domain="[('trend_total_hours', '=', 'up')]"/>
@@ -80,7 +76,7 @@
                 <field name="trend_cash_raised"/>
                 <field name="currency_id"/>
                 <templates>
-                    <t t-name="kanban-box">
+                    <t t-name="card">
                         <div t-attf-class="oe_kanban_card oe_kanban_global_click o_elkscharity_card #{record.activity_count.raw_value === 0 ? 'o_elkscharity_card_empty' : ''}">
                             <div class="o_kanban_card_header">
                                 <div class="o_kanban_card_header_title">

@@ -5,7 +5,13 @@
 
 Backed by a PostgreSQL VIEW so there is zero data duplication.
 """
-from odoo import fields, models, tools
+from odoo import _, api, fields, models, tools
+from odoo.exceptions import UserError
+
+
+# Offset added to attendance row IDs in the SQL view so they never
+# collide with timesheet IDs.  Keep in sync with the UNION ALL query.
+ATTENDANCE_ID_OFFSET = 1_000_000_000
 
 
 class ElksCharityHoursReport(models.Model):
@@ -104,3 +110,82 @@ class ElksCharityHoursReport(models.Model):
                   AND pp.x_is_charity_parent = TRUE
             )
         """ % self._table)
+
+    # ------------------------------------------------------------------
+    # Drill-down + bulk validation
+    # ------------------------------------------------------------------
+    def _source_model_and_id(self):
+        """Return (model_name, real_id) for this view row."""
+        self.ensure_one()
+        if self.source == 'attendance':
+            return 'hr.attendance', self.id - ATTENDANCE_ID_OFFSET
+        return 'account.analytic.line', self.id
+
+    def action_open_source_record(self):
+        """Open the underlying timesheet line or attendance record so
+        the Secretary can fix wrong hours, set the helper flag, edit
+        miles/cash/non-cash, or validate.
+
+        This is what the row-level pencil button calls in the list view.
+        """
+        self.ensure_one()
+        model, real_id = self._source_model_and_id()
+        rec = self.env[model].browse(real_id).exists()
+        if not rec:
+            raise UserError(_(
+                "The %(model)s record (id=%(id)s) backing this row no "
+                "longer exists.  Refresh the list."
+            ) % {'model': model, 'id': real_id})
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("Edit %s") % (
+                "Timesheet Line" if model == 'account.analytic.line'
+                else "Attendance"
+            ),
+            'res_model': model,
+            'res_id': rec.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
+    def action_validate_source_records(self):
+        """Validate every selected row, splitting by source.
+
+        Bound as a list-view multi-select Action so the Secretary can
+        select multiple pending rows and validate them all in one click,
+        without having to drill into each source record individually.
+        """
+        if not self:
+            return
+        ts_ids = []
+        att_ids = []
+        for rec in self:
+            model, real_id = rec._source_model_and_id()
+            if model == 'account.analytic.line':
+                ts_ids.append(real_id)
+            else:
+                att_ids.append(real_id)
+
+        n_ts = n_att = 0
+        if ts_ids:
+            ts_recs = self.env['account.analytic.line'].browse(ts_ids).exists()
+            ts_recs.action_validate_hours()
+            n_ts = len(ts_recs)
+        if att_ids:
+            att_recs = self.env['hr.attendance'].browse(att_ids).exists()
+            att_recs.action_validate_charity_attendance()
+            n_att = len(att_recs)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Charity Hours Validated"),
+                'message': _(
+                    "%(ts)d timesheet line(s) and %(att)d attendance "
+                    "record(s) validated for the GL report."
+                ) % {'ts': n_ts, 'att': n_att},
+                'type': 'success',
+                'next': {'type': 'ir.actions.act_window_close'},
+            },
+        }

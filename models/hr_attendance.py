@@ -34,8 +34,13 @@ class HrAttendance(models.Model):
     x_charity_hours = fields.Float(
         "Charity Hours",
         help="Hours to count toward the charity report.  Defaults to the "
-             "full worked time on this attendance; override if only part "
-             "of the shift was charity work.",
+             "raw clock-in → clock-out duration when a Charity Activity "
+             "is selected; override if only part of the shift was charity "
+             "work.\n\n"
+             "Per the GL Workbook: enter the TOTAL elapsed time for the "
+             "group.  If 6 Elks worked as a group for 3 hours, total Elk "
+             "Hours is 18 (6 × 3).  Round to WHOLE hours — no fractions "
+             "or decimals.",
     )
     x_charity_category_id = fields.Many2one(
         "elks.charity.category",
@@ -53,12 +58,22 @@ class HrAttendance(models.Model):
     )
     x_miles = fields.Float(
         "Miles (Round Trip)", default=0.0,
+        help="Total miles driven for this activity, ROUND TRIP.  Per the "
+             "GL Workbook: enter people × distance × round trip.  Round "
+             "to WHOLE miles — no fractions or decimals.",
     )
     x_cash_value = fields.Monetary(
         "Cash Donated", currency_field='x_currency_id',
+        help="Cash, check, or money order donated.  Per the GL Workbook: "
+             "WHOLE DOLLARS only — no dollar signs, cents, or decimals.  "
+             "For U.S. Savings Bonds, use purchase value, not maturity.",
     )
     x_non_cash_value = fields.Monetary(
         "Non-Cash Value", currency_field='x_currency_id',
+        help="Fair market value of donated goods (refreshments, supplies, "
+             "door prizes, postage, donated clothing, etc.).  Per the GL "
+             "Workbook: WHOLE DOLLARS only.  Use IRS valuation guidelines "
+             "for used items if unsure.",
     )
     x_charity_notes = fields.Text("Charity Notes")
     x_validated = fields.Boolean(

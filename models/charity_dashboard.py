@@ -261,6 +261,94 @@ class ElksCharityDashboard(models.Model):
             )
 
     # ------------------------------------------------------------------
+    # Website snippet — sudo-safe aggregates only.
+    # No individual contributor names, no per-employee records.  Pure
+    # category-level rollups so the snippet can render on a fully
+    # public page without leaking personal data.
+    # ------------------------------------------------------------------
+    @api.model
+    def _website_totals(self, lodge_year=None):
+        """Aggregated charity impact totals for the public website.
+
+        Returns a dict with:
+            current_year, prior_year                    — lodge year strings
+            totals.{hours,cash,non_cash,people_served}  — current year sums
+            prior.{...}                                 — same for prior year
+            deltas.{...}                                — current - prior
+            pct.{...}                                   — % change (or None)
+            cards                                       — list of per-category
+                                                          dicts sorted by code
+        Safe to call without an authenticated user; the caller should
+        sudo() before invoking on the public website.
+        """
+        lodge_year = lodge_year or _current_lodge_year()
+        prior_year = self._prior_lodge_year_str(lodge_year)
+
+        def _aggs(year):
+            if not year:
+                return {
+                    'hours': 0.0, 'cash': 0.0, 'non_cash': 0.0,
+                    'people_served': 0,
+                }
+            rows = self.search([('lodge_year', '=', year)])
+            return {
+                'hours': sum(rows.mapped('total_hours')),
+                'cash': sum(rows.mapped('cash_raised')),
+                'non_cash': sum(rows.mapped('non_cash_raised')),
+                'people_served': sum(rows.mapped('elks_headcount'))
+                                 + sum(rows.mapped('helper_headcount')),
+            }
+
+        totals = _aggs(lodge_year)
+        prior = _aggs(prior_year)
+
+        def _delta_pct(cur, old):
+            if not old:
+                return None
+            return round(((cur - old) / old) * 100.0, 1)
+
+        deltas = {k: totals[k] - prior[k] for k in totals}
+        pct = {k: _delta_pct(totals[k], prior[k]) for k in totals}
+
+        # Per-category cards — sorted by GL code asc.
+        cards = []
+        for row in self.search([('lodge_year', '=', lodge_year)],
+                               order='category_code'):
+            prior_row = self.search([
+                ('lodge_year', '=', prior_year),
+                ('category_id', '=', row.category_id.id),
+            ], limit=1) if prior_year else None
+            prior_hours = prior_row.total_hours if prior_row else 0.0
+            prior_cash = prior_row.cash_raised if prior_row else 0.0
+            cards.append({
+                'code': row.category_code,
+                'name': row.category_name,
+                'section': row.category_id.gl_section
+                          and dict(row.category_id._fields['gl_section'].selection)
+                              .get(row.category_id.gl_section, ''),
+                'hours': row.total_hours,
+                'cash': row.cash_raised,
+                'non_cash': row.non_cash_raised,
+                'people_served': row.elks_headcount + row.helper_headcount,
+                'activity_count': row.activity_count,
+                'prior_hours': prior_hours,
+                'prior_cash': prior_cash,
+                'delta_hours': row.total_hours - prior_hours,
+                'delta_cash': row.cash_raised - prior_cash,
+            })
+
+        return {
+            'current_year': lodge_year,
+            'prior_year': prior_year,
+            'totals': totals,
+            'prior': prior,
+            'deltas': deltas,
+            'pct': pct,
+            'cards': cards,
+            'currency': self.env.company.currency_id,
+        }
+
+    # ------------------------------------------------------------------
     # Open dashboard (entry point used by the root menu)
     # ------------------------------------------------------------------
     @api.model
@@ -362,33 +450,37 @@ class ElksCharityDashboard(models.Model):
         3. ``activity`` — aggregate counts of activity tasks per
            (category, lodge_year).
 
-        4. ``base`` — cross-join every active category with every
-           charity-parent project's lodge_year so zero-activity
-           categories still appear (motivates the lodge to fill gaps).
+        4. ``base`` — every (category, lodge_year) combination where at
+           least one project task exists in a charity-parent project for
+           that year.  We DON'T cross-join all categories — the lodge
+           only wants cards for charities they've actually taken on, not
+           empty placeholders for every GL code 1001-9999.
 
         5. The outer SELECT joins base ⟕ aggregated rows.
         """
         tools.drop_view_if_exists(self.env.cr, self._table)
         query = """
             CREATE OR REPLACE VIEW {table} AS (
-                WITH lodge_years AS (
-                    SELECT DISTINCT x_lodge_year AS lodge_year
-                    FROM project_project
-                    WHERE x_is_charity_parent = TRUE
-                      AND x_lodge_year IS NOT NULL
-                ),
-                base AS (
-                    -- Every (category, lodge_year) combination so we render
-                    -- empty cards for inactive categories.
-                    SELECT
+                WITH base AS (
+                    -- Only (category, lodge_year) combinations where at
+                    -- least one project task exists in a charity-parent
+                    -- project for that lodge year.  This avoids
+                    -- cluttering the dashboard with empty cards for
+                    -- GL codes the lodge hasn't taken on.
+                    SELECT DISTINCT
                         cat.id            AS category_id,
                         cat.code          AS category_code,
                         cat.name          AS category_name,
                         cat.gl_section    AS gl_section,
-                        ly.lodge_year     AS lodge_year
+                        pp.x_lodge_year   AS lodge_year
                     FROM elks_charity_category cat
-                    CROSS JOIN lodge_years ly
-                    WHERE cat.active = TRUE
+                    JOIN project_task pt
+                          ON pt.x_charity_category_id = cat.id
+                    JOIN project_project pp
+                          ON pp.id = pt.project_id
+                    WHERE pp.x_is_charity_parent = TRUE
+                      AND pp.x_lodge_year IS NOT NULL
+                      AND cat.active = TRUE
                 ),
                 deduped_lines AS (
                     -- (a) Validated charity-tagged attendance rows.

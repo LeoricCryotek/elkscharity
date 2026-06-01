@@ -218,11 +218,33 @@
         </field>
     </record>
 
+    <!-- Recurring Contribution TEMPLATES.
+         Hard domain: only is_recurring=True rows can ever appear here,
+         so a generated draft that ends up mis-flagged can never sneak in.
+         Defaults on New: a brand-new record in this view is a template. -->
     <record id="action_charity_contributions_recurring" model="ir.actions.act_window">
-        <field name="name">Recurring Contributions</field>
+        <field name="name">Recurring Contribution Templates</field>
         <field name="res_model">elks.charity.contribution</field>
         <field name="view_mode">list,form</field>
-        <field name="context">{'search_default_recurring': 1}</field>
+        <field name="domain">[('is_recurring', '=', True)]</field>
+        <field name="context">{
+            'default_is_recurring': True,
+            'default_state': 'confirmed',
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a recurring contribution template
+            </p>
+            <p>
+                Templates here are <strong>not the actual contributions</strong> —
+                they're the schedule.  Once a template is confirmed and has a
+                next-generation date, the daily cron creates a real draft
+                contribution on each occurrence date.  The Secretary then
+                reviews and confirms each generated draft (visible under
+                <strong>Contributions ▸ Pending Review</strong>) before it
+                counts in the Grand Lodge report.
+            </p>
+        </field>
     </record>
 
     <!-- ═══════════════════════════════════════════════════════════

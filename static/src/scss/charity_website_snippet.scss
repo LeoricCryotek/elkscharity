@@ -1,0 +1,104 @@
+// Elks Charity Impact — public website snippet.
+// Loaded into web.assets_frontend so it ships with the public website
+// rendering pipeline, not the backend.
+
+.s_elks_charity_impact {
+    background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+
+    .s_elks_charity_hero {
+        margin-bottom: 2rem;
+    }
+
+    .s_elks_charity_metric {
+        text-align: center;
+        padding: 24px 12px;
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        height: 100%;
+    }
+
+    .s_elks_charity_metric_value {
+        font-size: 2.4rem;
+        font-weight: 800;
+        line-height: 1.1;
+        color: #714B67;          // Elks/Odoo purple
+        margin-bottom: 6px;
+    }
+
+    .s_elks_charity_metric_label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6c757d;
+    }
+
+    .s_elks_charity_metric_delta {
+        font-size: 0.78rem;
+        margin-top: 8px;
+        font-weight: 500;
+    }
+
+    // Per-category cards
+    .s_elks_charity_card {
+        background: #ffffff;
+        border: 1px solid #eef0f2;
+        border-radius: 10px;
+        padding: 16px 18px;
+        transition: box-shadow 0.15s ease;
+
+        &:hover {
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        }
+    }
+
+    .s_elks_charity_card_header {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+
+    .s_elks_charity_card_code {
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: #714B67;
+        background: rgba(113, 75, 103, 0.08);
+        padding: 2px 8px;
+        border-radius: 4px;
+        flex: 0 0 auto;
+    }
+
+    .s_elks_charity_card_name {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: #212529;
+    }
+
+    .s_elks_charity_card_section {
+        font-size: 0.78rem;
+        margin-bottom: 8px;
+    }
+
+    .s_elks_charity_card_label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #6c757d;
+    }
+
+    .s_elks_charity_card_value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #212529;
+        line-height: 1.2;
+    }
+
+    .s_elks_charity_card_minor {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: #4a4f55;
+    }
+}

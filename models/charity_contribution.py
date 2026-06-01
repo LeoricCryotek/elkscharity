@@ -84,11 +84,17 @@ class ElksCharityContribution(models.Model):
     # ── contribution values ──────────────────────────────────────
     cash_value = fields.Monetary(
         "Cash Value", currency_field='currency_id', tracking=True,
-        help="Cash amount donated.",
+        help="Cash, check, or money order donated.  Per the GL Workbook: "
+             "WHOLE DOLLARS only — no dollar signs, cents, or decimals.  "
+             "For U.S. Savings Bonds, use purchase value, not maturity.",
     )
     non_cash_value = fields.Monetary(
         "Non-Cash Value", currency_field='currency_id', tracking=True,
-        help="Fair market value of in-kind goods, venue, services, etc.",
+        help="Fair market value of in-kind goods, venue use, or services.  "
+             "Per the GL Workbook: include refreshments, supplies, door "
+             "prizes, postage, telephone, donated clothing, eyeglasses, "
+             "etc.  WHOLE DOLLARS only.  Use IRS valuation guidelines for "
+             "used items.",
     )
     currency_id = fields.Many2one(
         "res.currency",
@@ -98,7 +104,9 @@ class ElksCharityContribution(models.Model):
     # ── people counts ────────────────────────────────────────────
     head_count = fields.Integer(
         "People Served",
-        help="Number of people who benefited from this contribution.",
+        help="Total number of people who BENEFITED from this contribution "
+             "(Column B on the GL Workbook).  Distinct from # Elks / # "
+             "Helpers, which count the volunteers (Columns C / D).",
     )
     elks_count = fields.Integer(
         "# Elks Involved",
@@ -130,32 +138,59 @@ class ElksCharityContribution(models.Model):
     )
 
     # ── recurrence ───────────────────────────────────────────────
+    # These fields belong to the TEMPLATE only.  copy=False ensures
+    # they are never carried into a generated draft, even if a future
+    # caller forgets to override them in `.copy()`.  An @api.constrains
+    # further enforces the invariant: a record with template_id set
+    # (= a generated copy) can never itself be a template.
     is_recurring = fields.Boolean(
-        "Recurring", tracking=True,
-        help="Mark as a repeating contribution. Future entries will be "
-             "auto-generated as drafts for review.",
+        "Recurring", tracking=True, copy=False,
+        help="Tick this on a TEMPLATE to schedule auto-generated "
+             "contributions.  Confirm the template and set the next "
+             "generation date; the daily cron will create one draft "
+             "contribution per occurrence date.  Generated drafts "
+             "themselves are NOT recurring.",
     )
     recurrence_frequency = fields.Selection(
-        FREQUENCY_SELECTION, string="Frequency",
+        FREQUENCY_SELECTION, string="Frequency", copy=False,
     )
     recurrence_end_date = fields.Date(
-        "Recurrence Ends",
+        "Recurrence Ends", copy=False,
         help="Stop generating entries after this date. "
              "Leave blank to continue indefinitely.",
     )
     template_id = fields.Many2one(
         "elks.charity.contribution", string="Generated From",
-        readonly=True, ondelete="set null", index=True,
-        help="The recurring template that created this entry.",
+        readonly=True, ondelete="set null", index=True, copy=False,
+        help="The recurring template that created this entry.  Empty "
+             "on templates and on manually-entered contributions.",
     )
     generated_ids = fields.One2many(
         "elks.charity.contribution", "template_id",
         string="Generated Entries",
     )
     next_generation_date = fields.Date(
-        "Next Generation Date",
-        help="Date for the next auto-generated entry.",
+        "Next Generation Date", copy=False,
+        help="Date for the next auto-generated entry.  Template-only.",
     )
+    event_ids = fields.One2many(
+        "calendar.event", "x_charity_contribution_id",
+        string="Linked Calendar Events",
+        help="Calendar events that drive this contribution's recurrence. "
+             "When at least one event is linked, the time-based cron is "
+             "skipped — entries are generated when the events fire instead.",
+    )
+    is_event_driven = fields.Boolean(
+        compute="_compute_is_event_driven", store=True,
+        string="Event-Driven",
+        help="True when the contribution's recurrence is driven by linked "
+             "calendar events instead of its own frequency.",
+    )
+
+    @api.depends("event_ids")
+    def _compute_is_event_driven(self):
+        for rec in self:
+            rec.is_event_driven = bool(rec.event_ids)
 
     # ── who ──────────────────────────────────────────────────────
     submitted_by = fields.Many2one(
@@ -264,6 +299,9 @@ class ElksCharityContribution(models.Model):
             '|',
             ('recurrence_end_date', '=', False),
             ('recurrence_end_date', '>=', today),
+            # Skip event-driven contributions — those are generated by the
+            # event-driven cron when the linked calendar event fires.
+            ('is_event_driven', '=', False),
         ])
         for tmpl in templates:
             gen_date = tmpl.next_generation_date
@@ -319,4 +357,17 @@ class ElksCharityContribution(models.Model):
                     and rec.recurrence_end_date < rec.contribution_date):
                 raise ValidationError(_(
                     "Recurrence end date cannot be before the contribution date."
+                ))
+
+    @api.constrains('is_recurring', 'template_id')
+    def _check_template_invariant(self):
+        """A record cannot be both a template (is_recurring=True) AND a
+        generated copy (template_id set).  Generated drafts are leaves
+        of the schedule, not roots."""
+        for rec in self:
+            if rec.is_recurring and rec.template_id:
+                raise ValidationError(_(
+                    "A generated contribution can't also be a recurring "
+                    "template.  Clear the 'Generated From' link, or "
+                    "untick 'Recurring' — not both at once."
                 ))

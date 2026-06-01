@@ -15,6 +15,19 @@
                                invisible="not x_charity_task_id"/>
                         <field name="x_charity_category_code" readonly="1"
                                invisible="not x_charity_task_id"/>
+                        <!--
+                          Recurring Contribution link: visible once a Charity
+                          Activity is picked (the domain narrows the dropdown
+                          to contributions on the same task). Both 'no_create'
+                          and 'no_open' are left at their defaults so editors
+                          can use the dropdown's "Create and Edit..." option
+                          to open the full Recurring Contribution form
+                          (frequency, end date, cash/non-cash, recipient,
+                          etc.) without leaving the event.
+                        -->
+                        <field name="x_charity_contribution_id"
+                               invisible="not x_charity_task_id"
+                               options="{'no_quick_create': True}"/>
                     </group>
                     <group>
                         <button name="action_log_charity_hours"
@@ -23,6 +36,17 @@
                                 class="btn-primary"
                                 icon="fa-clock-o"
                                 invisible="not x_charity_task_id"/>
+                        <button name="action_open_charity_contribution"
+                                type="object"
+                                string="Open Contribution"
+                                icon="fa-external-link"
+                                invisible="not x_charity_contribution_id"/>
+                        <button name="action_create_next_contribution_occurrence"
+                                type="object"
+                                string="Create Next Occurrence"
+                                class="btn-secondary"
+                                icon="fa-plus-circle"
+                                invisible="not x_charity_contribution_id"/>
                     </group>
                 </group>
             </xpath>

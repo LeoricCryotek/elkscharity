@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         "Elks Charity Impact" — public website snippet.
+
+         Mirrors the elks_calendar_publisher pattern as closely as
+         possible: minimal snippet template (a single mount <div>)
+         + frontend JS that fetches /elks-charity/website/totals.json
+         and renders the cards into the mount div.
+
+         Static HTML only at render time — the website builder's
+         thumbnail pass can never hang on this template.
+         ════════════════════════════════════════════════════════════════ -->
+
+    <!-- ────────── The snippet template (minimal mount div) ────────── -->
+    <template id="snippet_elks_charity_impact" name="Elks Charity Impact">
+        <section class="s_elks_charity_impact pt32 pb32"
+                 data-snippet="s_elks_charity_impact"
+                 data-name="Elks Charity Impact">
+            <div class="container">
+                <div class="elks-charity-mount">
+                    <p class="text-center text-muted">
+                        Loading charity totals…
+                    </p>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <!-- ────────── Register in the website builder palette ──────────
+         Two-step registration (Odoo 19): the group tile lives in
+         snippet_groups (created by elks_calendar_publisher already);
+         the snippet itself lives in snippet_structure with group="elks".
+         -->
+    <template id="snippet_elks_charity_impact_register"
+              inherit_id="website.snippets"
+              name="Elks Charity Impact Snippets">
+        <xpath expr="//snippets[@id='snippet_structure']" position="inside">
+            <t t-snippet="elkscharity.snippet_elks_charity_impact"
+               t-thumbnail="/elkscharity/static/description/icon.png"
+               group="elks">
+                <keywords>charity elks lodge totals impact hours volunteer</keywords>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

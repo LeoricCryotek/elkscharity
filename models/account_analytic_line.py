@@ -31,17 +31,27 @@ class AccountAnalyticLine(models.Model):
     # Grand Lodge workbook fields
     x_miles = fields.Float(
         "Miles (Round Trip)", default=0.0,
-        help="Total miles driven for this activity (round trip).",
+        help="Total miles driven for this activity, ROUND TRIP.\n\n"
+             "Per the GL Workbook: enter the product of people × distance "
+             "× round trip.  Example: 4 people drove 27½ miles each way → "
+             "enter 4 × 27.5 × 2 ≈ 220 miles.  Round to WHOLE miles — no "
+             "fractions, no decimals.",
     )
     x_non_cash_value = fields.Monetary(
         "Non-Cash Value", currency_field='currency_id',
         help="Fair market value of goods / materials donated, bought for, "
-             "or expended on this activity.",
+             "or expended on this activity.\n\n"
+             "Per the GL Workbook: include door prizes, refreshments, "
+             "supplies, postage, telephone charges, donated clothing or "
+             "eyeglasses (use IRS valuation guidelines if unsure).  "
+             "WHOLE DOLLARS only — no dollar signs, cents, or decimals.",
     )
     x_cash_value = fields.Monetary(
         "Cash Donated", currency_field='currency_id',
-        help="Cash actually handed to the charity (whole dollars only "
-             "per GL reporting rules).",
+        help="Cash, check, or money order given or donated.\n\n"
+             "Per the GL Workbook: for U.S. Savings Bonds, use the "
+             "PURCHASE value, not maturity value.  WHOLE DOLLARS only — "
+             "no dollar signs, cents, or decimals.",
     )
 
     # Grand Lodge Secretary validation

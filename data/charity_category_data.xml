@@ -36,14 +36,14 @@
         </record>
         <record id="cat_1102" model="elks.charity.category">
             <field name="code">1102</field>
-            <field name="name">Hoop Shoot</field>
+            <field name="name">Hoop Shoot®</field>
             <field name="gl_section">athletics</field>
             <field name="sequence">60</field>
             <field name="x_auto_create_task" eval="True"/>
         </record>
         <record id="cat_1103" model="elks.charity.category">
             <field name="code">1103</field>
-            <field name="name">Soccer Shoot</field>
+            <field name="name">Soccer Shoot®</field>
             <field name="gl_section">athletics</field>
             <field name="sequence">70</field>
             <field name="x_auto_create_task" eval="True"/>
@@ -140,7 +140,7 @@
         </record>
         <record id="cat_1502" model="elks.charity.category">
             <field name="code">1502</field>
-            <field name="name">Health Fairs / Blood Banks</field>
+            <field name="name">Health Fairs/Blood Banks</field>
             <field name="gl_section">community</field>
             <field name="sequence">210</field>
         </record>
@@ -173,7 +173,7 @@
         <!-- ===== Public Service ===== -->
         <record id="cat_1601" model="elks.charity.category">
             <field name="code">1601</field>
-            <field name="name">Public Service / Citizen Recognition</field>
+            <field name="name">Public Service/Citizen Recognition</field>
             <field name="gl_section">public</field>
             <field name="sequence">260</field>
         </record>
@@ -187,13 +187,11 @@
             <field name="x_auto_create_task" eval="True"/>
         </record>
 
-        <record id="cat_1702" model="elks.charity.category">
-            <field name="code">1702</field>
-            <field name="name">Elks National Foundation - Donation by Lodge/Assn</field>
-            <field name="gl_section">enf</field>
-            <field name="sequence">275</field>
-            <field name="x_auto_create_task" eval="True"/>
-        </record>
+        <!-- cat_1702 (ENF Donation by Lodge/Assn) removed in 19.0.2.4
+             to strictly match the official Grand Lodge workbook (only
+             1701 is in the workbook).  Pre-existing tasks/contributions
+             that pointed at 1702 are re-assigned to 1701 by the
+             19.0.2.4 post-migration script. -->
 
         <!-- ===== Drug Awareness ===== -->
         <record id="cat_1801" model="elks.charity.category">

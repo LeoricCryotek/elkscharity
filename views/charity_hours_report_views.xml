@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Unified Charity Hours list view -->
+    <!-- Unified Charity Hours list view.
+         The model is a SQL VIEW so rows are read-only here, but each
+         row exposes a pencil button that jumps to the underlying
+         timesheet line or attendance record where you CAN edit.    -->
     <record id="view_charity_hours_report_tree" model="ir.ui.view">
         <field name="name">elks.charity.hours.report.tree</field>
         <field name="model">elks.charity.hours.report</field>
@@ -20,8 +23,24 @@
                 <field name="non_cash_value" sum="Total" optional="hide"/>
                 <field name="source" optional="show"/>
                 <field name="validated" widget="boolean"/>
+                <button name="action_open_source_record"
+                        type="object"
+                        icon="fa-pencil-square-o"
+                        string="Open source record"
+                        title="Open the underlying timesheet line or attendance to edit hours / miles / dollars."/>
             </list>
         </field>
+    </record>
+
+    <!-- Bulk validate action — select rows in the list, then
+         Actions ▸ "Validate Selected Hours for GL Report" -->
+    <record id="action_bulk_validate_charity_hours" model="ir.actions.server">
+        <field name="name">Validate Selected Hours for GL Report</field>
+        <field name="model_id" ref="model_elks_charity_hours_report"/>
+        <field name="binding_model_id" ref="model_elks_charity_hours_report"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_validate_source_records()</field>
     </record>
 
     <!-- Search view -->

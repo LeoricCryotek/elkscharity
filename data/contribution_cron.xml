@@ -17,4 +17,25 @@
         <field name="active">True</field>
     </record>
 
+    <!-- ═══════════════════════════════════════════════════════════
+         Cron: Generate Event-Driven Charity Contributions
+         Runs daily.  For each calendar.event in the last 48 hours
+         that links to a Recurring Contribution template, creates a
+         draft contribution dated to the event's day if one doesn't
+         already exist.  This handles the case where a contribution's
+         recurrence is driven by the calendar event schedule (e.g.
+         every Fit & Fall Proof Tuesday produces a Grace Bible Church
+         venue-donation draft) rather than the contribution's own
+         frequency setting.
+         ═══════════════════════════════════════════════════════════ -->
+    <record id="cron_generate_event_driven_contributions" model="ir.cron">
+        <field name="name">Charity: Generate Event-Driven Contributions</field>
+        <field name="model_id" ref="calendar.model_calendar_event"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_generate_event_driven_contributions()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
+
 </odoo>

@@ -21,7 +21,11 @@ class ProjectTask(models.Model):
     )
     x_head_count = fields.Integer(
         "Participants (Head Count)",
-        help="Manual head count for this activity (people served directly).",
+        help="Total number of people who BENEFITED from or were SERVED "
+             "by this activity.  This is Column B on the GL Workbook.\n\n"
+             "Example: a Bicycle Safety event with 217 children → enter "
+             "217.  Distinct from # Elks / # Helpers, which are the "
+             "VOLUNTEERS who put the event on (Columns C and D).",
     )
     x_total_head_count = fields.Integer(
         "Total Head Count", compute="_compute_totals",

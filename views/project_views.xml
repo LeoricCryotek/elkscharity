@@ -22,6 +22,17 @@
                                widget="statinfo"/>
                     </div>
                 </button>
+                <button name="%(action_charity_quick_entry_wizard)d"
+                        type="action"
+                        class="oe_stat_button"
+                        icon="fa-pencil-square-o"
+                        invisible="not x_is_charity_parent"
+                        title="Submit a BPOE Data Collection Survey entry">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Quick</span>
+                        <span class="o_stat_text">Entry</span>
+                    </div>
+                </button>
             </xpath>
             <xpath expr="//sheet" position="inside">
                 <group string="Elks Charity" invisible="not x_is_charity_parent">
@@ -52,6 +63,21 @@
         <field name="model">project.task</field>
         <field name="inherit_id" ref="project.view_task_form2"/>
         <field name="arch" type="xml">
+            <!-- "+ Quick Entry" button in the task header for fast
+                 logging of an event tied to this activity. -->
+            <xpath expr="//header" position="inside">
+                <button name="%(action_charity_quick_entry_wizard)d"
+                        type="action"
+                        string="Quick Entry"
+                        class="btn-success"
+                        icon="fa-pencil-square-o"
+                        invisible="not x_is_charity_activity"
+                        context="{
+                            'default_task_id': id,
+                            'default_charity_category_id': x_charity_category_id,
+                            'default_program_name': name,
+                        }"/>
+            </xpath>
             <xpath expr="//sheet" position="inside">
                 <group string="Elks Charity Reporting"
                        invisible="not x_is_charity_activity">

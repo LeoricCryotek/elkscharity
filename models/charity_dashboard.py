@@ -430,6 +430,21 @@ class ElksCharityDashboard(models.Model):
             ],
         }
 
+    def action_quick_entry(self):
+        """Launch the Quick Entry wizard pre-filled with this card's
+        charity category."""
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": f"Quick Entry — {self.category_code} {self.category_name}",
+            "res_model": "elks.charity.quick.entry.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_charity_category_id": self.category_id.id,
+            },
+        }
+
     # ------------------------------------------------------------------
     # SQL view
     # ------------------------------------------------------------------
@@ -518,7 +533,12 @@ class ElksCharityDashboard(models.Model):
 
                     UNION ALL
 
-                    -- (b) Validated timesheet lines NOT duplicated by attendance
+                    -- (b) Validated timesheet lines NOT duplicated by
+                    --     attendance, AND NOT personal-record-only.
+                    --     Personal-record lines are created by the Quick
+                    --     Entry wizard for member personal history; the
+                    --     bulk totals live on the contribution row, so
+                    --     including these here would double-count.
                     SELECT
                         pt.x_charity_category_id   AS category_id,
                         pp.x_lodge_year            AS lodge_year,
@@ -534,6 +554,7 @@ class ElksCharityDashboard(models.Model):
                     JOIN project_project pp
                           ON pp.id = aal.project_id
                     WHERE aal.x_validated = TRUE
+                      AND COALESCE(aal.x_personal_record, FALSE) = FALSE
                       AND pp.x_is_charity_parent = TRUE
                       AND pt.x_charity_category_id IS NOT NULL
                       AND NOT EXISTS (
@@ -579,7 +600,11 @@ class ElksCharityDashboard(models.Model):
                         SUM(c.non_cash_value)     AS contrib_non_cash,
                         SUM(c.elks_count)         AS contrib_elks,
                         SUM(c.helper_count)       AS contrib_helpers,
-                        SUM(c.head_count)         AS contrib_heads
+                        SUM(c.head_count)         AS contrib_heads,
+                        SUM(COALESCE(c.elks_hours, 0))    AS contrib_elks_hours,
+                        SUM(COALESCE(c.helper_hours, 0))  AS contrib_helper_hours,
+                        SUM(COALESCE(c.elks_miles, 0))    AS contrib_elks_miles,
+                        SUM(COALESCE(c.helper_miles, 0))  AS contrib_helper_miles
                     FROM elks_charity_contribution c
                     JOIN project_task pt    ON pt.id = c.task_id
                     JOIN project_project pp ON pp.id = pt.project_id
@@ -611,16 +636,30 @@ class ElksCharityDashboard(models.Model):
                     base.category_name,
                     base.gl_section,
                     base.lodge_year,
-                    COALESCE(la.elks_hours, 0)       AS elks_hours,
-                    COALESCE(la.helper_hours, 0)     AS helper_hours,
                     COALESCE(la.elks_hours, 0)
-                      + COALESCE(la.helper_hours, 0) AS total_hours,
+                      + COALESCE(ca.contrib_elks_hours, 0)
+                                                     AS elks_hours,
+                    COALESCE(la.helper_hours, 0)
+                      + COALESCE(ca.contrib_helper_hours, 0)
+                                                     AS helper_hours,
+                    COALESCE(la.elks_hours, 0)
+                      + COALESCE(la.helper_hours, 0)
+                      + COALESCE(ca.contrib_elks_hours, 0)
+                      + COALESCE(ca.contrib_helper_hours, 0)
+                                                     AS total_hours,
                     COALESCE(la.elks_unique, 0)      AS elks_unique,
                     COALESCE(la.helper_unique, 0)    AS helper_unique,
-                    COALESCE(la.elks_headcount, 0)   AS elks_headcount,
-                    COALESCE(la.helper_headcount, 0) AS helper_headcount,
-                    COALESCE(la.elks_miles, 0)       AS elks_miles,
-                    COALESCE(la.helper_miles, 0)     AS helper_miles,
+                    COALESCE(la.elks_headcount, 0)
+                      + COALESCE(ca.contrib_elks, 0) AS elks_headcount,
+                    COALESCE(la.helper_headcount, 0)
+                      + COALESCE(ca.contrib_helpers, 0)
+                                                     AS helper_headcount,
+                    COALESCE(la.elks_miles, 0)
+                      + COALESCE(ca.contrib_elks_miles, 0)
+                                                     AS elks_miles,
+                    COALESCE(la.helper_miles, 0)
+                      + COALESCE(ca.contrib_helper_miles, 0)
+                                                     AS helper_miles,
                     COALESCE(la.line_cash, 0)
                       + COALESCE(ca.contrib_cash, 0) AS cash_raised,
                     COALESCE(la.line_non_cash, 0)

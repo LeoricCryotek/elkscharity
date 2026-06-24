@@ -14,6 +14,15 @@ class ResPartnerCharity(models.Model):
 
     @api.depends('x_volunteer_employee_id')
     def _compute_charity_hours(self):
+        """Charity hours for the member's personal history.
+
+        Includes BOTH validated lines (timesheet entries from real
+        events) AND personal-record lines created by the Quick Entry
+        wizard.  Personal-record lines are excluded from GL totals
+        (the bulk contribution carries those) but they DO show on the
+        member's profile so they get credit for their participation
+        in bulk-entered events.
+        """
         AAL = self.env['account.analytic.line']
         for partner in self:
             emp = partner.x_volunteer_employee_id

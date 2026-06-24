@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         Quick Entry wizard form view — laid out to mirror the BPOE
+         paper "Data Collection Survey" form for muscle-memory entry.
+         ════════════════════════════════════════════════════════════════ -->
+    <record id="view_charity_quick_entry_wizard_form" model="ir.ui.view">
+        <field name="name">elks.charity.quick.entry.wizard.form</field>
+        <field name="model">elks.charity.quick.entry.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Quick Entry — Charity Activity">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Data Collection — Charity Activity</h1>
+                        <p class="text-muted">
+                            Mirrors the BPOE paper form (Columns A through J).
+                            One submission creates one bulk contribution
+                            for the Grand Lodge report; optionally
+                            attribute hours to specific members for
+                            personal records.
+                        </p>
+                    </div>
+
+                    <group>
+                        <group string="Header">
+                            <field name="committee"
+                                   placeholder="e.g. Veterans' Service Committee"/>
+                            <field name="event_date"/>
+                        </group>
+                        <group string="Program">
+                            <field name="charity_category_id"
+                                   options="{'no_create': True}"/>
+                            <field name="program_name"
+                                   placeholder="e.g. Bicycle Safety Day"/>
+                            <field name="task_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+
+                    <group string="Columns B – D · Participation">
+                        <group>
+                            <field name="head_count" string="(B) Participants"/>
+                            <field name="elks_count" string="(C) # Elks"/>
+                            <field name="helper_count" string="(D) # Helpers"/>
+                        </group>
+                    </group>
+
+                    <group string="Columns E – F · Volunteer Hours">
+                        <group>
+                            <field name="elks_hours"
+                                   string="(E) Total Elk Hours"
+                                   widget="float_time"/>
+                            <field name="helper_hours"
+                                   string="(F) Total Helper Hours"
+                                   widget="float_time"/>
+                        </group>
+                    </group>
+
+                    <group string="Columns G – H · Mileage (Round Trip)">
+                        <group>
+                            <field name="elks_miles"
+                                   string="(G) Elk Miles"/>
+                            <field name="helper_miles"
+                                   string="(H) Helper Miles"/>
+                        </group>
+                    </group>
+
+                    <group string="Columns I – J · Donations">
+                        <group>
+                            <field name="non_cash_value"
+                                   string="(I) Non-Cash Value"/>
+                            <field name="cash_value"
+                                   string="(J) Cash Donations"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Attribute to Specific Members (optional)"
+                           col="2">
+                        <p colspan="2" class="text-muted small mb-2">
+                            Pick members below to give each one a
+                            personal record of their share.  Hours and
+                            miles are SPLIT EVENLY across the selected
+                            people; the bulk totals stay on the
+                            contribution for the Grand Lodge report.
+                            These per-member lines don't re-count in GL
+                            totals.
+                        </p>
+                        <field name="elks_member_ids"
+                               widget="many2many_tags"
+                               options="{'no_create': True}"
+                               placeholder="Add Elks…"
+                               colspan="2"/>
+                        <field name="per_elk_hours"
+                               widget="float_time"
+                               readonly="1"
+                               string="Each Elk receives"
+                               invisible="not elks_member_ids"/>
+                        <field name="helper_member_ids"
+                               widget="many2many_tags"
+                               options="{'no_create': True}"
+                               placeholder="Add Helpers…"
+                               colspan="2"/>
+                        <field name="per_helper_hours"
+                               widget="float_time"
+                               readonly="1"
+                               string="Each Helper receives"
+                               invisible="not helper_member_ids"/>
+                    </group>
+                </sheet>
+
+                <footer>
+                    <button name="action_submit"
+                            string="Submit Entry"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel"
+                            class="btn-secondary"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_charity_quick_entry_wizard"
+            model="ir.actions.act_window">
+        <field name="name">Quick Entry</field>
+        <field name="res_model">elks.charity.quick.entry.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

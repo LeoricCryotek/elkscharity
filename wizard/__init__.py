@@ -5,3 +5,4 @@ from . import log_hours_from_event_wizard
 from . import assign_charity_wizard
 from . import grand_lodge_report_wizard
 from . import charity_annual_report_wizard
+from . import quick_entry_wizard

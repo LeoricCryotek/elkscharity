@@ -60,6 +60,26 @@ class AccountAnalyticLine(models.Model):
         help="Lock this line as ready for inclusion in the annual "
              "Grand Lodge Charity Workbook.",
     )
+    # Personal-record marker (added 19.0.2.11) — flags timesheet lines
+    # created by the Quick Entry wizard purely so a member sees their
+    # share of a bulk event in their personal "charity hours" history.
+    # The corresponding charity.contribution already holds the bulk
+    # totals for GL reporting; including these lines in the GL totals
+    # would double-count.  All summing logic must filter these out.
+    x_personal_record = fields.Boolean(
+        "Personal Record Only", default=False, index=True, copy=False,
+        help="Marks this line as personal-record-only: it shows on the "
+             "member's individual charity history but is EXCLUDED from "
+             "Grand Lodge totals and the Charity Dashboard.  Set by the "
+             "Quick Entry wizard when bulk-attributing hours; the "
+             "matching elks.charity.contribution holds the GL totals.",
+    )
+    # Back-link from a wizard-created personal-record line to the
+    # contribution that holds the official bulk totals.
+    x_source_contribution_id = fields.Many2one(
+        "elks.charity.contribution", string="Source Bulk Contribution",
+        readonly=True, ondelete="set null", index=True, copy=False,
+    )
     x_validated_by = fields.Many2one(
         "res.users", string="Validated By", readonly=True, copy=False,
     )

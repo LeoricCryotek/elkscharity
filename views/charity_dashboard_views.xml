@@ -206,6 +206,13 @@
                                                     class="btn btn-sm btn-secondary float-end me-2">
                                                 Hours
                                             </button>
+                                            <button type="object"
+                                                    name="action_quick_entry"
+                                                    class="btn btn-sm btn-success float-end me-2"
+                                                    title="Submit a BPOE Data Collection Survey entry for this category">
+                                                <i class="fa fa-plus me-1" title="Add" role="img" aria-label="Add"/>
+                                                Quick Entry
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

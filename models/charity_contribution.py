@@ -101,20 +101,43 @@ class ElksCharityContribution(models.Model):
         default=lambda self: self.env.company.currency_id,
     )
 
-    # ── people counts ────────────────────────────────────────────
+    # ── people counts (GL Workbook columns B, C, D) ──────────────
     head_count = fields.Integer(
-        "People Served",
+        "(B) People Served",
         help="Total number of people who BENEFITED from this contribution "
              "(Column B on the GL Workbook).  Distinct from # Elks / # "
              "Helpers, which count the volunteers (Columns C / D).",
     )
     elks_count = fields.Integer(
-        "# Elks Involved",
-        help="Number of Elks members involved (without logging hours).",
+        "(C) # Elks Involved",
+        help="Number of Elks members involved (Column C).",
     )
     helper_count = fields.Integer(
-        "# Helpers Involved",
-        help="Number of non-Elk helpers involved.",
+        "(D) # Helpers Involved",
+        help="Number of non-Elk helpers involved (Column D).",
+    )
+
+    # ── hours / miles (GL Workbook columns E, F, G, H) ───────────
+    # Added in 19.0.2.11 so a single contribution can hold an entire
+    # GL row.  Quick-entry wizard writes here for bulk totals; the
+    # dashboard SQL view sums these into the per-category roll-ups.
+    elks_hours = fields.Float(
+        "(E) Total Elk Hours",
+        help="Total Elk hours for this activity (Column E).  Per the GL "
+             "Workbook: 6 Elks × 6 hours = 36.  Whole hours only.",
+    )
+    helper_hours = fields.Float(
+        "(F) Total Helper Hours",
+        help="Total non-Elk helper hours (Column F).  Whole hours only.",
+    )
+    elks_miles = fields.Float(
+        "(G) Elk Miles",
+        help="Total Elk mileage, ROUND TRIP (Column G).  Per the GL "
+             "Workbook: people × distance × round trip.  Whole miles.",
+    )
+    helper_miles = fields.Float(
+        "(H) Helper Miles",
+        help="Total non-Elk helper mileage, round trip (Column H).",
     )
 
     # ── recipient ────────────────────────────────────────────────

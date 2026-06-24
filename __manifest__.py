@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Elks Charity — Volunteer Hours, Activities & Grand Lodge Report",
-    "version": "19.0.2.10",
+    "version": "19.0.2.13",
     "category": "Productivity",
     "summary": "Track volunteer hours and charitable activities per "
                "Grand Lodge categories (1001–9999). Uses Odoo Projects "
@@ -44,6 +44,7 @@ base, mail, project, hr_timesheet, calendar, elkscontacts, elksfrs
         "hr_attendance",
         "calendar",
         "website",
+        "portal",
         "elkscontacts",
         "elksfrs",
     ],
@@ -53,6 +54,10 @@ base, mail, project, hr_timesheet, calendar, elkscontacts, elksfrs
         "data/charity_category_data.xml",
         "data/initial_project_data.xml",
         "views/charity_category_views.xml",
+        # quick_entry_wizard_views.xml must load BEFORE project_views.xml
+        # and charity_dashboard_views.xml because both reference
+        # action_charity_quick_entry_wizard via %(...)d.
+        "wizard/quick_entry_wizard_views.xml",
         "views/project_views.xml",
         "views/timesheet_views.xml",
         "views/calendar_views.xml",
@@ -75,6 +80,7 @@ base, mail, project, hr_timesheet, calendar, elkscontacts, elksfrs
         # report/timecard_report.xml moved to elksattendance in 19.0.1.9
         "views/charity_dashboard_views.xml",
         "views/charity_website_snippet.xml",
+        "views/charity_portal_templates.xml",
         "views/elkscharity_menus.xml",
     ],
     "assets": {

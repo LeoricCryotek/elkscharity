@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         /my home page — add a "Charity Entries" tile next to the
+         standard portal tiles (Invoices, Quotations, etc.).
+         ════════════════════════════════════════════════════════════════ -->
+    <template id="portal_my_home_charity"
+              name="Portal My Home : Charity Entries"
+              inherit_id="portal.portal_my_home"
+              priority="40">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
+            <t t-call="portal.portal_docs_entry">
+                <t t-set="title">Charity Entries</t>
+                <t t-set="text">My Data Collection Survey submissions</t>
+                <t t-set="url" t-value="'/my/charity'"/>
+                <t t-set="placeholder_count" t-value="'charity_count'"/>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         List of THIS user's past charity submissions.
+         ════════════════════════════════════════════════════════════════ -->
+    <template id="portal_my_charity_list"
+              name="My Charity Entries">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">My Charity Entries</t>
+            </t>
+
+            <t t-if="request.params.get('submitted')">
+                <div class="alert alert-success" role="alert">
+                    <strong>Thank you!</strong> Your entry has been
+                    submitted and is pending Secretary review.
+                </div>
+            </t>
+
+            <div class="d-flex justify-content-end mb-3">
+                <a href="/my/charity/new" class="btn btn-primary">
+                    + New Entry
+                </a>
+            </div>
+
+            <t t-if="not contributions">
+                <p class="alert alert-info">
+                    You haven't submitted any charity entries yet.
+                    Click "+ New Entry" above to log your first one.
+                </p>
+            </t>
+
+            <t t-if="contributions">
+                <table class="table table-sm o_portal_my_doc_table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Program</th>
+                            <th>Category</th>
+                            <th class="text-end"># Elks</th>
+                            <th class="text-end">Elk Hrs</th>
+                            <th class="text-end">$ Cash</th>
+                            <th class="text-end">$ Non-Cash</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="contributions" t-as="c">
+                            <td><t t-esc="c.contribution_date"/></td>
+                            <td><t t-esc="c.name"/></td>
+                            <td>
+                                <t t-if="c.charity_category_id">
+                                    <t t-esc="c.charity_category_id.code"/>
+                                    <t t-esc="c.charity_category_id.name"/>
+                                </t>
+                            </td>
+                            <td class="text-end"><t t-esc="c.elks_count"/></td>
+                            <td class="text-end">
+                                <t t-esc="'%.0f' % (c.elks_hours or 0)"/>
+                            </td>
+                            <td class="text-end">
+                                $<t t-esc="'%.0f' % (c.cash_value or 0)"/>
+                            </td>
+                            <td class="text-end">
+                                $<t t-esc="'%.0f' % (c.non_cash_value or 0)"/>
+                            </td>
+                            <td>
+                                <span t-attf-class="badge text-bg-#{
+                                    'success' if c.state == 'confirmed'
+                                    else 'secondary' if c.state == 'cancelled'
+                                    else 'warning'}">
+                                    <t t-esc="dict(c._fields['state'].selection).get(c.state, c.state)"/>
+                                </span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </t>
+        </t>
+    </template>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         New-entry form — mirrors the BPOE Data Collection Survey.
+         ════════════════════════════════════════════════════════════════ -->
+    <template id="portal_my_charity_form"
+              name="Submit Charity Entry">
+        <t t-call="portal.portal_layout">
+            <div class="container">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/my">My Account</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="/my/charity">Charity Entries</a>
+                    </li>
+                    <li class="breadcrumb-item active">New</li>
+                </ol>
+
+                <h2 class="mb-1">Data Collection Survey</h2>
+                <p class="text-muted mb-4">
+                    Volunteer, Youth, Charitable and Community Service
+                    Programs.  Mirrors the BPOE paper form (Columns A
+                    through J).  Submissions go to the Secretary for
+                    review before counting in the Grand Lodge report.
+                </p>
+
+                <form method="POST" action="/my/charity/new"
+                      class="o_portal_form">
+                    <input type="hidden" name="csrf_token"
+                           t-att-value="request.csrf_token()"/>
+
+                    <!-- Header -->
+                    <fieldset class="mb-4">
+                        <legend class="h5 border-bottom pb-2">Header</legend>
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label class="form-label">Committee</label>
+                                <input type="text" class="form-control"
+                                       name="committee"
+                                       t-att-value="form.get('committee', '')"
+                                       placeholder="e.g. Veterans' Service Committee"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Date *</label>
+                                <input type="date"
+                                       t-attf-class="form-control #{'is-invalid' if errors.get('event_date') else ''}"
+                                       name="event_date"
+                                       t-att-value="form.get('event_date') or today"/>
+                                <div class="invalid-feedback"
+                                     t-if="errors.get('event_date')">
+                                    <t t-esc="errors.get('event_date')"/>
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Program -->
+                    <fieldset class="mb-4">
+                        <legend class="h5 border-bottom pb-2">
+                            (A) Program
+                        </legend>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">GL Category *</label>
+                                <select t-attf-class="form-select #{'is-invalid' if errors.get('charity_category_id') else ''}"
+                                        name="charity_category_id">
+                                    <option value="">— Select GL category —</option>
+                                    <t t-foreach="categories" t-as="cat">
+                                        <option t-att-value="cat.id"
+                                                t-att-selected="str(cat.id) == str(form.get('charity_category_id', ''))">
+                                            <t t-esc="cat.code"/> — <t t-esc="cat.name"/>
+                                        </option>
+                                    </t>
+                                </select>
+                                <div class="invalid-feedback"
+                                     t-if="errors.get('charity_category_id')">
+                                    <t t-esc="errors.get('charity_category_id')"/>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    (A) Program Name *
+                                </label>
+                                <input type="text"
+                                       t-attf-class="form-control #{'is-invalid' if errors.get('program_name') else ''}"
+                                       name="program_name"
+                                       t-att-value="form.get('program_name', '')"
+                                       placeholder="e.g. Bicycle Safety Day"/>
+                                <div class="invalid-feedback"
+                                     t-if="errors.get('program_name')">
+                                    <t t-esc="errors.get('program_name')"/>
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Participation -->
+                    <fieldset class="mb-4">
+                        <legend class="h5 border-bottom pb-2">
+                            Participation (Columns B – D)
+                        </legend>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">
+                                    (B) Number of Participants
+                                </label>
+                                <input type="number" min="0" class="form-control"
+                                       name="head_count"
+                                       t-att-value="form.get('head_count', '')"/>
+                                <small class="text-muted">
+                                    People who BENEFITED from the program.
+                                </small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">
+                                    (C) Number of Elks
+                                </label>
+                                <input type="number" min="0" class="form-control"
+                                       name="elks_count"
+                                       t-att-value="form.get('elks_count', '')"/>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">
+                                    (D) Number of Helpers
+                                </label>
+                                <input type="number" min="0" class="form-control"
+                                       name="helper_count"
+                                       t-att-value="form.get('helper_count', '')"/>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Volunteer Hours -->
+                    <fieldset class="mb-4">
+                        <legend class="h5 border-bottom pb-2">
+                            Volunteer Hours (Columns E – F)
+                        </legend>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    (E) Total Elk Hours
+                                </label>
+                                <input type="number" min="0" step="1" class="form-control"
+                                       name="elks_hours"
+                                       t-att-value="form.get('elks_hours', '')"/>
+                                <small class="text-muted">
+                                    6 Elks × 6 hours = 36.  Whole hours only.
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    (F) Total Helper Hours
+                                </label>
+                                <input type="number" min="0" step="1" class="form-control"
+                                       name="helper_hours"
+                                       t-att-value="form.get('helper_hours', '')"/>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Mileage -->
+                    <fieldset class="mb-4">
+                        <legend class="h5 border-bottom pb-2">
+                            Mileage (Columns G – H)
+                        </legend>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    (G) Elk Miles (Round Trip)
+                                </label>
+                                <input type="number" min="0" step="1" class="form-control"
+                                       name="elks_miles"
+                                       t-att-value="form.get('elks_miles', '')"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    (H) Helper Miles
+                                </label>
+                                <input type="number" min="0" step="1" class="form-control"
+                                       name="helper_miles"
+                                       t-att-value="form.get('helper_miles', '')"/>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Donations -->
+                    <fieldset class="mb-4">
+                        <legend class="h5 border-bottom pb-2">
+                            Donations (Columns I – J)
+                        </legend>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    (I) Non-Cash Contributions ($)
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" min="0" step="1" class="form-control"
+                                           name="non_cash_value"
+                                           t-att-value="form.get('non_cash_value', '')"/>
+                                </div>
+                                <small class="text-muted">
+                                    Value of donated food, gifts, clothing, etc.
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    (J) Cash Donations ($)
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" min="0" step="1" class="form-control"
+                                           name="cash_value"
+                                           t-att-value="form.get('cash_value', '')"/>
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="/my/charity"
+                           class="btn btn-link">← Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            Submit Entry
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </t>
+    </template>
+
+</odoo>

@@ -24,6 +24,15 @@
               action="action_charity_dashboard_landing"
               sequence="5"/>
 
+    <!-- Direct shortcut to the BPOE Data Collection Survey form so
+         volunteers can drop in entries without drilling into a
+         dashboard card or task first. -->
+    <menuitem id="menu_elkscharity_quick_entry"
+              name="Quick Entry"
+              parent="menu_elkscharity_root"
+              action="action_charity_quick_entry_wizard"
+              sequence="8"/>
+
     <menuitem id="menu_elkscharity_projects"
               name="Charity Projects"
               parent="menu_elkscharity_root"

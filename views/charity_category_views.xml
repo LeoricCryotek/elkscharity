@@ -11,6 +11,8 @@
                 <field name="sequence"/>
                 <field name="x_auto_create_task" string="Auto-Create"
                        widget="boolean_toggle"/>
+                <field name="x_show_on_website" string="Show on Website"
+                       widget="boolean_toggle"/>
                 <field name="active" widget="boolean_toggle"/>
             </list>
         </field>
@@ -31,6 +33,7 @@
                         <field name="gl_section"/>
                         <field name="sequence"/>
                         <field name="x_auto_create_task"/>
+                        <field name="x_show_on_website"/>
                         <field name="active"/>
                     </group>
                     <field name="description"/>

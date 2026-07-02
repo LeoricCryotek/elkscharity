@@ -311,9 +311,16 @@ class ElksCharityDashboard(models.Model):
         pct = {k: _delta_pct(totals[k], prior[k]) for k in totals}
 
         # Per-category cards — sorted by GL code asc.
+        # Respects the per-category `x_show_on_website` flag so the
+        # lodge can hide categories they aren't pursuing this year
+        # without deleting historical data.
         cards = []
-        for row in self.search([('lodge_year', '=', lodge_year)],
-                               order='category_code'):
+        rows = self.search([('lodge_year', '=', lodge_year)],
+                           order='category_code')
+        visible_rows = rows.filtered(
+            lambda r: r.category_id.x_show_on_website
+        )
+        for row in visible_rows:
             prior_row = self.search([
                 ('lodge_year', '=', prior_year),
                 ('category_id', '=', row.category_id.id),

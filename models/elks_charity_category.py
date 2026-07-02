@@ -47,6 +47,13 @@ class ElksCharityCategory(models.Model):
              "charity project is started.  Use for recurring programmes "
              "like ENF, Hoop Shoot, Drug Awareness, etc.",
     )
+    x_show_on_website = fields.Boolean(
+        "Show on Website", default=True,
+        help="Toggle whether this category's card appears in the public "
+             "\"Elks Charity Impact\" website snippet.  Uncheck to hide "
+             "categories the lodge isn't actively pursuing this year.  "
+             "The internal Charity Dashboard is not affected.",
+    )
 
     display_name = fields.Char(
         compute="_compute_display_name", store=True,

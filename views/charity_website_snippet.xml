@@ -45,30 +45,14 @@
         </xpath>
     </template>
 
-    <!-- ────────── Style-tab options for the snippet ──────────
-         Adds a "Category Visibility" info panel to the Style tab when
-         the snippet is selected in the website builder.  The single
-         source of truth is `elks.charity.category.x_show_on_website`;
-         editors are pointed at the backend list where they can toggle
-         each category with one click.  The published page and the
-         internal admin therefore never drift. -->
-    <template id="snippet_options_elks_charity_impact"
-              inherit_id="website.snippet_options"
-              name="Elks Charity Impact — Options">
-        <xpath expr="." position="inside">
-            <div data-selector=".s_elks_charity_impact">
-                <we-title>Elks Charity Impact</we-title>
-                <we-alert>
-                    <strong>Category Visibility.</strong>
-                    Uncheck any category the lodge isn't pursuing this
-                    year to hide its card from the public page.
-                    <br/><br/>
-                    Manage at:
-                    <em>Elks Charity → Configuration → GL Categories</em>
-                    → toggle the <em>"Show on Website"</em> column.
-                </we-alert>
-            </div>
-        </xpath>
-    </template>
+    <!-- NOTE: The Style-tab options template was removed in 19.0.2.16.
+         Odoo 19 no longer exposes  website.snippet_options  as an
+         inheritable xmlid, so the old template failed with
+             ValueError: External ID not found in the system:
+                         website.snippet_options
+         Category visibility is still fully controllable via the backend
+         admin:  Elks Charity → Configuration → GL Categories → toggle
+         the "Show on Website" column.  That toggle is the single source
+         of truth and the public snippet reads it on every render. -->
 
 </odoo>

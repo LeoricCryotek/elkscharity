@@ -223,3 +223,43 @@ class ProjectTask(models.Model):
             )
             # Total head count = manual task-level + confirmed contributions
             rec.x_total_head_count = rec.x_head_count + contrib_heads
+
+    # ------------------------------------------------------------------
+    # Auto-categorize tasks in charity-parent projects that were created
+    # without a Charity Category set.  Falls back to 9999 "Categories
+    # Not Covered" so every charity activity rolls up somewhere on the
+    # dashboard instead of falling off the map.
+    # ------------------------------------------------------------------
+    @api.model
+    def _default_uncovered_charity_category_id(self):
+        cat = self.env.ref(
+            "elkscharity.cat_9999", raise_if_not_found=False
+        )
+        return cat.id if cat else False
+
+    def _ensure_charity_category(self):
+        """If the task lives in a charity-parent project and has no
+        category, default it to 9999.  Idempotent."""
+        fallback = self._default_uncovered_charity_category_id()
+        if not fallback:
+            return
+        for rec in self:
+            if rec.x_charity_category_id:
+                continue
+            proj = rec.project_id
+            if proj and proj.x_is_charity_parent:
+                rec.x_charity_category_id = fallback
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._ensure_charity_category()
+        return records
+
+    def write(self, vals):
+        res = super().write(vals)
+        # If either the project link or the category was touched, make
+        # sure a charity-parent task still has a category.
+        if "project_id" in vals or "x_charity_category_id" in vals:
+            self._ensure_charity_category()
+        return res

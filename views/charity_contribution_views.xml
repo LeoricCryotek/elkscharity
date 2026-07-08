@@ -29,8 +29,29 @@
                             string="Reset to Draft"
                             type="object"
                             invisible="state != 'confirmed'"/>
+                    <!-- Elks.org submission controls (post-confirm) -->
+                    <button name="action_push_to_elks_org"
+                            string="Push to Elks.org"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-cloud-upload"
+                            invisible="state != 'confirmed' or x_elks_org_state == 'pushed'"/>
+                    <button name="action_mark_submitted_manually"
+                            string="Mark Submitted Manually"
+                            type="object"
+                            invisible="state != 'confirmed' or x_elks_org_state == 'pushed'"/>
+                    <button name="action_skip_elks_org"
+                            string="Skip Submission"
+                            type="object"
+                            invisible="state != 'confirmed' or x_elks_org_state in ('pushed', 'skipped')"/>
+                    <button name="action_reset_elks_org_state"
+                            string="Reset Submission State"
+                            type="object"
+                            invisible="x_elks_org_state == 'not_pushed'"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="draft,confirmed"/>
+                    <field name="x_elks_org_state" widget="statusbar"
+                           statusbar_visible="not_pushed,pushed"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -109,6 +130,34 @@
                             <field name="notes"
                                    placeholder="Additional details about this contribution..."/>
                         </page>
+                        <page string="Elks.org Submission" name="elks_org">
+                            <group>
+                                <group string="Submission State">
+                                    <field name="x_elks_org_state" readonly="1"/>
+                                    <field name="x_elks_org_pushed_on" readonly="1"
+                                           invisible="not x_elks_org_pushed_on"/>
+                                    <field name="x_elks_org_pushed_by" readonly="1"
+                                           invisible="not x_elks_org_pushed_by"/>
+                                    <field name="x_elks_org_confirmation" readonly="1"
+                                           invisible="not x_elks_org_confirmation"/>
+                                </group>
+                                <group string="Failure Info"
+                                       invisible="not x_elks_org_last_error">
+                                    <field name="x_elks_org_retry_count" readonly="1"/>
+                                    <field name="x_elks_org_last_error" readonly="1"
+                                           widget="text"/>
+                                </group>
+                            </group>
+                            <p class="text-muted small">
+                                Auto-push runs when the Secretary confirms
+                                this contribution and their profile has
+                                <em>Auto-Push Charity Entries to Elks.org</em>
+                                enabled under Preferences → Elks.org
+                                Credentials.  Use the header buttons above
+                                to push manually, mark as manually submitted,
+                                skip, or reset.
+                            </p>
+                        </page>
                     </notebook>
                 </sheet>
                 <chatter/>
@@ -140,6 +189,13 @@
                        decoration-info="state == 'draft'"
                        decoration-success="state == 'confirmed'"
                        decoration-muted="state == 'cancelled'"/>
+                <field name="x_elks_org_state" widget="badge"
+                       string="Elks.org"
+                       decoration-warning="x_elks_org_state == 'not_pushed'"
+                       decoration-success="x_elks_org_state == 'pushed'"
+                       decoration-muted="x_elks_org_state == 'skipped'"
+                       decoration-danger="x_elks_org_state == 'failed'"
+                       optional="show"/>
             </list>
         </field>
     </record>
@@ -185,6 +241,19 @@
     <!-- ═══════════════════════════════════════════════════════════
          Actions
          ═══════════════════════════════════════════════════════════ -->
+    <!-- Bulk-push server action.  Select confirmed contributions in
+         the list, then Actions ▸ "Push Selected to Elks.org (Bulk)".
+         Playwright logs in ONCE and pushes every selected row through
+         the same browser session. -->
+    <record id="action_bulk_push_to_elks_org" model="ir.actions.server">
+        <field name="name">Push Selected to Elks.org (Bulk)</field>
+        <field name="model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_bulk_push_to_elks_org()</field>
+    </record>
+
     <record id="action_charity_contributions" model="ir.actions.act_window">
         <field name="name">Charity Contributions</field>
         <field name="res_model">elks.charity.contribution</field>

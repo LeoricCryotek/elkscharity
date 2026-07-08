@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Elks Charity — Volunteer Hours, Activities & Grand Lodge Report",
-    "version": "19.0.2.16",
+    "version": "19.0.2.21",
     "category": "Productivity",
     "summary": "Track volunteer hours and charitable activities per "
                "Grand Lodge categories (1001–9999). Uses Odoo Projects "
@@ -66,6 +66,7 @@ base, mail, project, hr_timesheet, calendar, elkscontacts, elksfrs
         "views/hr_employee_charity_views.xml",
         "views/res_partner_charity_views.xml",
         "views/charity_contribution_views.xml",
+        "views/res_users_elks_org_views.xml",
         "data/contribution_cron.xml",
         "wizard/yearly_wrapup_wizard_views.xml",
         "wizard/log_hours_from_event_wizard_views.xml",

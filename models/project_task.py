@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Extends ``project.task`` so each task can represent a single
 charitable activity tagged with a Grand Lodge category."""
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 
 
 class ProjectTask(models.Model):
@@ -87,6 +87,15 @@ class ProjectTask(models.Model):
     x_contribution_ids = fields.One2many(
         "elks.charity.contribution", "task_id",
         string="Contributions",
+    )
+
+    # Attendance records tagged to this charity task.  Exposed as a
+    # one2many so the task form can render an attendance list right
+    # under the renamed "Hours" tab, next to the standard timesheet
+    # lines — one view, all sources.
+    x_charity_attendance_ids = fields.One2many(
+        "hr.attendance", "x_charity_task_id",
+        string="Attendance-Sourced Hours",
     )
 
     @api.depends("project_id", "project_id.x_is_charity_parent")
@@ -230,6 +239,53 @@ class ProjectTask(models.Model):
     # Not Covered" so every charity activity rolls up somewhere on the
     # dashboard instead of falling off the map.
     # ------------------------------------------------------------------
+    def action_prepare_charity_submission(self):
+        """Open the Quick Entry wizard pre-populated with this task's
+        validated roll-up totals.
+
+        Bridges the gap between "I validated the hours" and "the entry
+        is on its way to elks.org": one click reads the task's current
+        totals and drops them into the wizard as defaults, so the
+        Secretary can review + submit without re-typing.
+        """
+        self.ensure_one()
+        if not self.x_is_charity_activity:
+            return False
+        # Force a fresh compute so the wizard sees the latest validated
+        # numbers (in case timesheets or attendance were validated but
+        # the task's stored roll-up hasn't been re-fetched yet).
+        self.invalidate_recordset([
+            "x_elks_hours", "x_helper_hours",
+            "x_elks_miles", "x_helper_miles",
+            "x_elks_count", "x_helper_count",
+            "x_cash_total", "x_non_cash_total",
+            "x_total_head_count",
+        ])
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Prepare Submission — %s") % (self.name or "Charity"),
+            "res_model": "elks.charity.quick.entry.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_task_id": self.id,
+                "default_charity_category_id":
+                    self.x_charity_category_id.id or False,
+                "default_program_name": self.name or "",
+                "default_event_date":
+                    (self.x_event_date or fields.Date.today()).isoformat(),
+                "default_head_count": self.x_total_head_count or 0,
+                "default_elks_count": self.x_elks_count or 0,
+                "default_helper_count": self.x_helper_count or 0,
+                "default_elks_hours": self.x_elks_hours or 0.0,
+                "default_helper_hours": self.x_helper_hours or 0.0,
+                "default_elks_miles": self.x_elks_miles or 0.0,
+                "default_helper_miles": self.x_helper_miles or 0.0,
+                "default_cash_value": self.x_cash_total or 0.0,
+                "default_non_cash_value": self.x_non_cash_total or 0.0,
+            },
+        }
+
     @api.model
     def _default_uncovered_charity_category_id(self):
         cat = self.env.ref(

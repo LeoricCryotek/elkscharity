@@ -77,6 +77,54 @@
                             'default_charity_category_id': x_charity_category_id,
                             'default_program_name': name,
                         }"/>
+                <!-- Bridges "hours validated" → "sent to elks.org":
+                     one click reads the validated roll-ups and drops
+                     them into the Quick Entry wizard as defaults. -->
+                <button name="action_prepare_charity_submission"
+                        type="object"
+                        string="Prepare Submission"
+                        class="btn-primary"
+                        icon="fa-cloud-upload"
+                        invisible="not x_is_charity_activity"
+                        title="Roll up the validated hours on this activity into a Quick Entry ready to submit to elks.org."/>
+            </xpath>
+            <!-- Add a new "Hours" notebook page (charity tasks only)
+                 that lists every attendance record tagged to this
+                 task.  Timesheet lines still live in the standard
+                 Timesheets tab; this new page complements it with
+                 the attendance-sourced hours the Secretary was
+                 missing.
+                 We inject the page after the last existing page in
+                 the notebook so we don't depend on any particular
+                 tab name existing in the parent view (that guess
+                 blew up in Odoo 19 where the Timesheets tab is
+                 defined by a different inherit). -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Hours (Attendance)"
+                      name="elkscharity_attendance_hours"
+                      invisible="not x_is_charity_activity">
+                    <field name="x_charity_attendance_ids" readonly="1">
+                        <list default_order="check_in desc" create="false">
+                            <field name="check_in"/>
+                            <field name="check_out"/>
+                            <field name="employee_id"/>
+                            <field name="x_charity_hours" widget="float_time"
+                                   string="Charity Hrs"/>
+                            <field name="x_is_helper" string="Helper?"/>
+                            <field name="x_miles"/>
+                            <field name="x_cash_value"/>
+                            <field name="x_non_cash_value"/>
+                            <field name="x_validated" widget="boolean_toggle"
+                                   string="Validated"/>
+                        </list>
+                    </field>
+                    <p class="text-muted small">
+                        Every attendance clock-in tagged to this charity
+                        activity appears above.  Standard timesheet lines
+                        stay in the "Timesheets" tab.  Both sources feed
+                        the Roll-Up totals below.
+                    </p>
+                </page>
             </xpath>
             <xpath expr="//sheet" position="inside">
                 <group string="Elks Charity Reporting"

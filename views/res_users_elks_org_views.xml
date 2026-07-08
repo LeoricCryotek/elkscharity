@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Add an "Elks.org Credentials" tab to the standard Preferences
+         form so any user can set their own login without needing
+         admin access.  SELF_READABLE_FIELDS / SELF_WRITEABLE_FIELDS
+         in res_users_elks_org.py grants the ACL for these fields on
+         the current user record. -->
+    <record id="view_users_form_preferences_elks_org"
+            model="ir.ui.view">
+        <field name="name">res.users.preferences.form.elkscharity</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form_simple_modif"/>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Elks.org Credentials"
+                      name="elks_org_credentials">
+                    <group>
+                        <group string="Auto-Push Settings">
+                            <field name="x_elks_org_enabled"/>
+                            <field name="x_elks_org_login"
+                                   placeholder="Your elks.org member number or email"/>
+                            <field name="x_elks_org_password"
+                                   password="True"
+                                   placeholder="Your elks.org password"/>
+                            <field name="x_elks_org_last_success"
+                                   readonly="1"
+                                   invisible="not x_elks_org_last_success"/>
+                        </group>
+                    </group>
+                    <p class="text-muted small">
+                        When <em>Auto-Push Charity Entries to Elks.org</em>
+                        is enabled, confirming a charity contribution in
+                        this Odoo instance automatically opens a headless
+                        Chromium browser, logs into
+                        <a href="https://www.elks.org/grandlodge/charity/local.cfm"
+                           target="_blank">
+                            elks.org's Local Lodge Reporting page
+                        </a>
+                        using the credentials above, and submits the
+                        entry through the actual form.
+                    </p>
+                    <p class="text-muted small">
+                        <strong>Server prerequisite:</strong> Playwright
+                        + Chromium must be installed on the Odoo server.
+                        One-time setup, run as the odoo user:<br/>
+                        <code>&lt;odoo-venv&gt;/bin/pip install playwright</code><br/>
+                        <code>&lt;odoo-venv&gt;/bin/playwright install chromium</code><br/>
+                        <code>&lt;odoo-venv&gt;/bin/playwright install-deps chromium</code>
+                        <br/>Then restart Odoo.  For bulk pushes select
+                        multiple rows in the Contributions list and use
+                        <em>Actions → Push Selected to Elks.org (Bulk)</em>
+                        — Chromium logs in ONCE for the whole batch.
+                    </p>
+                    <p class="text-muted small">
+                        <strong>Security note:</strong> your password is
+                        stored in the Odoo database.  Any Odoo administrator
+                        could theoretically read it.  If your lodge's
+                        security policy requires zero credential storage,
+                        leave <em>Auto-Push</em> disabled and use the
+                        "Mark Submitted Manually" button on each
+                        contribution after you submit it on elks.org
+                        yourself.
+                    </p>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Same tab on the full admin res.users form.  Not strictly
+         required because Preferences covers the self-service case,
+         but useful for admins who set up credentials on behalf of
+         a Secretary during initial rollout. -->
+    <record id="view_users_form_elks_org" model="ir.ui.view">
+        <field name="name">res.users.form.elkscharity</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Elks.org Credentials"
+                      name="elks_org_credentials">
+                    <group>
+                        <group>
+                            <field name="x_elks_org_enabled"/>
+                            <field name="x_elks_org_login"/>
+                            <field name="x_elks_org_password"
+                                   password="True"/>
+                            <field name="x_elks_org_last_success"
+                                   readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

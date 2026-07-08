@@ -226,9 +226,57 @@ class ElksCharityContribution(models.Model):
     )
     confirmed_date = fields.Datetime("Confirmed At", readonly=True)
 
+    # ── elks.org submission tracking (added 19.0.2.18) ───────────
+    # Each contribution needs to be submitted to elks.org's Local
+    # Lodge Reporting page (/grandlodge/charity/local.cfm).  Push is
+    # attempted automatically when the Secretary approves; a manual
+    # "Mark Submitted" / "Skip" / "Retry" flow exists for cases where
+    # auto-push isn't possible (no creds, elks.org site change, etc.).
+    x_elks_org_state = fields.Selection(
+        [
+            ("not_pushed", "Not Submitted"),
+            ("pushed", "Submitted"),
+            ("skipped", "Skipped (Not Submitting)"),
+            ("failed", "Push Failed — Retry"),
+        ],
+        string="Elks.org Status", default="not_pushed",
+        tracking=True, copy=False, index=True,
+        help="Where this contribution stands with respect to elks.org "
+             "Local Lodge Reporting.  Auto-push attempts run on "
+             "Secretary approval and update this field.",
+    )
+    x_elks_org_pushed_on = fields.Datetime(
+        "Submitted to Elks.org At", readonly=True, copy=False,
+    )
+    x_elks_org_pushed_by = fields.Many2one(
+        "res.users", string="Submitted to Elks.org By",
+        readonly=True, copy=False,
+        help="User whose elks.org credentials were used for the push.",
+    )
+    x_elks_org_confirmation = fields.Char(
+        "Elks.org Confirmation #", readonly=True, copy=False,
+        help="Confirmation reference returned by elks.org (when the "
+             "site exposes one).  Kept for reconciliation.",
+    )
+    x_elks_org_last_error = fields.Text(
+        "Last Push Error", readonly=True, copy=False,
+        help="Truncated error message from the last failed push "
+             "attempt.  Cleared on the next successful push.",
+    )
+    x_elks_org_retry_count = fields.Integer(
+        "Push Retry Count", default=0, readonly=True, copy=False,
+    )
+
     # ── actions ──────────────────────────────────────────────────
     def action_confirm(self):
-        """Secretary confirms the contribution entry."""
+        """Secretary confirms the contribution entry.
+
+        After confirming, if the current user has elks.org credentials
+        configured and auto-push enabled, attempts to POST the
+        contribution to /grandlodge/charity/local.cfm.  Push failures
+        are recorded on the contribution but don't roll back the
+        confirmation — the Secretary can retry manually.
+        """
         for rec in self:
             if rec.state != 'draft':
                 raise UserError(_("Only draft contributions can be confirmed."))
@@ -246,6 +294,282 @@ class ElksCharityContribution(models.Model):
                     cash=rec.cash_value,
                     noncash=rec.non_cash_value,
                     who=self.env.user.name,
+                ),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+            # Auto-push to elks.org if the Secretary opted in.
+            if (rec.x_elks_org_state == 'not_pushed'
+                    and self.env.user.x_elks_org_enabled
+                    and self.env.user.x_elks_org_login):
+                try:
+                    rec._push_to_elks_org()
+                except Exception:
+                    # Never let a push failure roll back the confirm.
+                    # The failure is captured on the record via
+                    # x_elks_org_state='failed' + x_elks_org_last_error.
+                    pass
+
+    # ── elks.org push actions ────────────────────────────────────
+    def action_push_to_elks_org(self):
+        """Manually trigger the elks.org push for selected rows."""
+        for rec in self:
+            if rec.state != 'confirmed':
+                raise UserError(_(
+                    "Only confirmed contributions can be pushed to elks.org."
+                ))
+            if rec.x_elks_org_state == 'pushed':
+                raise UserError(_(
+                    "This contribution was already submitted to elks.org "
+                    "on %s.", rec.x_elks_org_pushed_on
+                ))
+            if not self.env.user.x_elks_org_login:
+                raise UserError(_(
+                    "Set your elks.org login under Preferences → "
+                    "Elks.org Credentials before pushing."
+                ))
+            rec._push_to_elks_org()
+
+    def action_mark_submitted_manually(self):
+        """Flag as manually submitted on elks.org (no HTTP push)."""
+        for rec in self:
+            rec.write({
+                'x_elks_org_state': 'pushed',
+                'x_elks_org_pushed_on': fields.Datetime.now(),
+                'x_elks_org_pushed_by': self.env.user.id,
+                'x_elks_org_last_error': False,
+            })
+            rec.message_post(
+                body=_(
+                    "<strong>Marked as manually submitted to elks.org</strong>"
+                    " by %(who)s.", who=self.env.user.name,
+                ),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    def action_skip_elks_org(self):
+        """Mark as skipped — do not submit to elks.org."""
+        for rec in self:
+            rec.write({
+                'x_elks_org_state': 'skipped',
+                'x_elks_org_last_error': False,
+            })
+            rec.message_post(
+                body=_(
+                    "<strong>Skipped elks.org submission</strong> "
+                    "(will not push).",
+                ),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+
+    def action_reset_elks_org_state(self):
+        """Reset back to 'not_pushed' so the auto-push can retry."""
+        for rec in self:
+            rec.write({
+                'x_elks_org_state': 'not_pushed',
+                'x_elks_org_last_error': False,
+                'x_elks_org_retry_count': 0,
+            })
+
+    def action_bulk_push_to_elks_org(self):
+        """Bulk push — logs into elks.org ONCE and POSTs every selected
+        contribution in the same headless-browser session.  Meant for
+        Secretary batch runs (e.g., end-of-month uploading dozens of
+        entries at a time)."""
+        from ..services.elks_org_client import ElksOrgClient, ElksOrgError
+
+        # Filter to eligible rows only.
+        eligible = self.filtered(
+            lambda r: r.state == 'confirmed'
+                      and r.x_elks_org_state in ('not_pushed', 'failed')
+        )
+        if not eligible:
+            raise UserError(_(
+                "No selected contributions are eligible for push.  "
+                "Rows must be Confirmed and Not-Yet-Submitted."
+            ))
+
+        user = self.env.user
+        password = user._elks_org_password_clear()
+        if not user.x_elks_org_login or not password:
+            raise UserError(_(
+                "Set your elks.org credentials under Preferences → "
+                "Elks.org Credentials before running a bulk push."
+            ))
+
+        # Build the payload list in the same order as `eligible`.
+        payloads = [rec._build_elks_org_payload() for rec in eligible]
+
+        client = ElksOrgClient(
+            login=user.x_elks_org_login,
+            password=password,
+            login_url=self.env["ir.config_parameter"].sudo().get_param(
+                "elkscharity.elks_org_login_url",
+                default="https://www.elks.org/login.cfm",
+            ),
+            form_url=self.env["ir.config_parameter"].sudo().get_param(
+                "elkscharity.elks_org_form_url",
+                default="https://www.elks.org/grandlodge/charity/local.cfm",
+            ),
+            headless=True,
+        )
+
+        try:
+            results = client.submit_many(payloads)
+        except ElksOrgError as e:
+            # Bulk failure BEFORE any per-record submission — usually
+            # login or Playwright missing.  Mark none pushed.
+            raise UserError(_(
+                "Bulk push aborted: %s"
+            ) % str(e)[:500])
+
+        pushed, failed = 0, 0
+        for rec, (confirmation, err) in zip(eligible, results):
+            if err:
+                rec.write({
+                    'x_elks_org_state': 'failed',
+                    'x_elks_org_last_error': err[:1000],
+                    'x_elks_org_retry_count':
+                        (rec.x_elks_org_retry_count or 0) + 1,
+                })
+                rec.message_post(
+                    body=_(
+                        "<strong>Bulk push FAILED for this record</strong>: %(err)s",
+                        err=err[:500],
+                    ),
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_note',
+                )
+                failed += 1
+            else:
+                rec.write({
+                    'x_elks_org_state': 'pushed',
+                    'x_elks_org_pushed_on': fields.Datetime.now(),
+                    'x_elks_org_pushed_by': user.id,
+                    'x_elks_org_confirmation': confirmation or False,
+                    'x_elks_org_last_error': False,
+                })
+                rec.message_post(
+                    body=_(
+                        "<strong>Bulk-pushed to elks.org</strong>. "
+                        "Confirmation: %(ref)s",
+                        ref=confirmation or "(none returned)",
+                    ),
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_note',
+                )
+                pushed += 1
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Elks.org Bulk Push"),
+                'message': _(
+                    "Pushed %(p)d contribution(s), %(f)d failed.  "
+                    "Details in each record's chatter.",
+                    p=pushed, f=failed,
+                ),
+                'type': 'success' if failed == 0 else 'warning',
+                'next': {'type': 'ir.actions.act_window_close'},
+            },
+        }
+
+    def _build_elks_org_payload(self):
+        """Return the dict the ElksOrgClient expects for a single push."""
+        self.ensure_one()
+        cat_code = (self.charity_category_id.code or "").strip()
+        program_name = (self.name or self.charity_category_id.name or "")[:50]
+        other_program = ""
+        if cat_code == "9999":
+            other_program = (self.recipient_org or program_name)[:50]
+        return {
+            "programDate": (self.contribution_date or fields.Date.today())
+                              .strftime("%Y-%m-%d"),
+            "programID": cat_code,
+            "otherProgramID": other_program or "n/a",
+            "programName": program_name,
+            "headcount": int(self.head_count or 0),
+            "numberElks": int(self.elks_count or 0),
+            "numberHelpers": int(self.helper_count or 0),
+            "hoursElks": int(round(self.elks_hours or 0)),
+            "hoursHelpers": int(round(self.helper_hours or 0)),
+            "milesElks": int(round(self.elks_miles or 0)),
+            "milesHelpers": int(round(self.helper_miles or 0)),
+            "nonCash": int(round(self.non_cash_value or 0)),
+            "cash": int(round(self.cash_value or 0)),
+        }
+
+    def _push_to_elks_org(self):
+        """Internal — submit this contribution to elks.org.
+
+        Uses the CURRENT user's stored elks.org credentials.  Updates
+        state fields on this record based on the outcome.  Never
+        raises out of this method — errors are captured on the record.
+        """
+        from ..services.elks_org_client import ElksOrgClient, ElksOrgError
+
+        self.ensure_one()
+        user = self.env.user
+        password = user._elks_org_password_clear()
+        if not user.x_elks_org_login or not password:
+            self.write({
+                'x_elks_org_state': 'failed',
+                'x_elks_org_last_error': _(
+                    "No elks.org credentials configured for %s.",
+                    user.name,
+                ),
+                'x_elks_org_retry_count': (self.x_elks_org_retry_count or 0) + 1,
+            })
+            return
+
+        client = ElksOrgClient(
+            login=user.x_elks_org_login,
+            password=password,
+            login_url=self.env["ir.config_parameter"].sudo().get_param(
+                "elkscharity.elks_org_login_url",
+                default="https://www.elks.org/login.cfm",
+            ),
+            form_url=self.env["ir.config_parameter"].sudo().get_param(
+                "elkscharity.elks_org_form_url",
+                default="https://www.elks.org/grandlodge/charity/local.cfm",
+            ),
+        )
+
+        payload = self._build_elks_org_payload()
+
+        try:
+            confirmation = client.submit_contribution(payload)
+            self.write({
+                'x_elks_org_state': 'pushed',
+                'x_elks_org_pushed_on': fields.Datetime.now(),
+                'x_elks_org_pushed_by': user.id,
+                'x_elks_org_confirmation': confirmation or False,
+                'x_elks_org_last_error': False,
+            })
+            self.message_post(
+                body=_(
+                    "<strong>Submitted to elks.org</strong> "
+                    "as %(login)s.  Confirmation: %(ref)s",
+                    login=user.x_elks_org_login,
+                    ref=confirmation or "(none returned)",
+                ),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+        except ElksOrgError as e:
+            err = str(e)[:1000]
+            self.write({
+                'x_elks_org_state': 'failed',
+                'x_elks_org_last_error': err,
+                'x_elks_org_retry_count': (self.x_elks_org_retry_count or 0) + 1,
+            })
+            self.message_post(
+                body=_(
+                    "<strong>Elks.org push FAILED</strong>: %(err)s",
+                    err=err,
                 ),
                 message_type='comment',
                 subtype_xmlid='mail.mt_note',

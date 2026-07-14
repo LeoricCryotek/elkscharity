@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+      Config parameters for the elks.org auto-push.  Loaded with
+      noupdate="1" so lodges can override the URLs (e.g. when elks.org
+      changes their endpoints) without losing their custom values on
+      the next module upgrade.
+
+      Where to change them:
+          Settings → Technical → System Parameters
+          Filter for  elkscharity.elks_org_*
+
+      Defaults are the current-as-of-July-2026 URLs:
+        - Login page redirects  /login.cfm → /secure/elksLogin.cfm
+          so we use the direct URL to save one navigation.
+        - Form page is unchanged.
+    -->
+    <data noupdate="1">
+
+        <record id="elks_org_login_url" model="ir.config_parameter">
+            <field name="key">elkscharity.elks_org_login_url</field>
+            <field name="value">https://www.elks.org/secure/elksLogin.cfm</field>
+        </record>
+
+        <record id="elks_org_form_url" model="ir.config_parameter">
+            <field name="key">elkscharity.elks_org_form_url</field>
+            <field name="value">https://www.elks.org/grandlodge/charity/local.cfm</field>
+        </record>
+
+    </data>
+</odoo>

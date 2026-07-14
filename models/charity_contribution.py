@@ -407,7 +407,7 @@ class ElksCharityContribution(models.Model):
             password=password,
             login_url=self.env["ir.config_parameter"].sudo().get_param(
                 "elkscharity.elks_org_login_url",
-                default="https://www.elks.org/login.cfm",
+                default="https://www.elks.org/secure/elksLogin.cfm",
             ),
             form_url=self.env["ir.config_parameter"].sudo().get_param(
                 "elkscharity.elks_org_form_url",
@@ -477,6 +477,90 @@ class ElksCharityContribution(models.Model):
             },
         }
 
+    def _log_elks_org_failure(self, error_text, diagnostics):
+        """Post a chatter note with the error + attach diagnostics so
+        we can see EXACTLY what elks.org returned.
+
+        Two attachment kinds, whichever the client captured:
+          * screenshot_png_b64  — Playwright screenshot (legacy)
+          * html_snippet        — first 2000 chars of the response body
+                                  from the failing request; saved as a
+                                  .html file the user can click to open
+                                  in a browser tab and inspect.
+        """
+        import base64
+        self.ensure_one()
+        attachment_ids = []
+
+        if diagnostics and diagnostics.get("screenshot_png_b64"):
+            att = self.env["ir.attachment"].sudo().create({
+                "name": "elks_org_failure_%s.png" % (self.id or "new"),
+                "type": "binary",
+                "datas": diagnostics["screenshot_png_b64"],
+                "res_model": self._name,
+                "res_id": self.id,
+                "mimetype": "image/png",
+            })
+            attachment_ids.append(att.id)
+
+        if diagnostics and diagnostics.get("html_snippet"):
+            html = diagnostics["html_snippet"]
+            att = self.env["ir.attachment"].sudo().create({
+                "name": "elks_org_response_%s.html" % (self.id or "new"),
+                "type": "binary",
+                "datas": base64.b64encode(html.encode("utf-8")).decode("ascii"),
+                "res_model": self._name,
+                "res_id": self.id,
+                "mimetype": "text/html",
+            })
+            attachment_ids.append(att.id)
+
+        parts = [
+            "<strong>Elks.org push FAILED</strong>: %s" % (
+                (error_text or "")[:600]
+            ),
+        ]
+        if diagnostics:
+            if diagnostics.get("url"):
+                parts.append(
+                    "<br/><em>Landed at:</em> <code>%s</code>"
+                    % diagnostics["url"][:300]
+                )
+            if diagnostics.get("title"):
+                parts.append(
+                    "<br/><em>Page title:</em> %s"
+                    % diagnostics["title"][:200]
+                )
+            # Inline the first 400 chars of the response body so the
+            # Secretary doesn't have to open the attachment for a quick
+            # eyeball.
+            if diagnostics.get("html_snippet"):
+                snippet = diagnostics["html_snippet"][:400]
+                # Escape HTML so it doesn't render inside the chatter
+                escaped = (
+                    snippet.replace("&", "&amp;")
+                           .replace("<", "&lt;")
+                           .replace(">", "&gt;")
+                )
+                parts.append(
+                    "<br/><br/><em>Response preview:</em>"
+                    "<pre style='background:#f5f5f5;padding:8px;"
+                    "font-size:11px;max-height:200px;overflow:auto;"
+                    "border:1px solid #ddd;'>%s</pre>" % escaped
+                )
+            if attachment_ids:
+                parts.append(
+                    "<em>Full response attached above ↑ — open the .html "
+                    "file to see exactly what elks.org sent back after "
+                    "the login POST.</em>"
+                )
+        self.message_post(
+            body="".join(parts),
+            message_type="comment",
+            subtype_xmlid="mail.mt_note",
+            attachment_ids=attachment_ids,
+        )
+
     def _build_elks_org_payload(self):
         """Return the dict the ElksOrgClient expects for a single push."""
         self.ensure_one()
@@ -530,7 +614,7 @@ class ElksCharityContribution(models.Model):
             password=password,
             login_url=self.env["ir.config_parameter"].sudo().get_param(
                 "elkscharity.elks_org_login_url",
-                default="https://www.elks.org/login.cfm",
+                default="https://www.elks.org/secure/elksLogin.cfm",
             ),
             form_url=self.env["ir.config_parameter"].sudo().get_param(
                 "elkscharity.elks_org_form_url",
@@ -566,14 +650,7 @@ class ElksCharityContribution(models.Model):
                 'x_elks_org_last_error': err,
                 'x_elks_org_retry_count': (self.x_elks_org_retry_count or 0) + 1,
             })
-            self.message_post(
-                body=_(
-                    "<strong>Elks.org push FAILED</strong>: %(err)s",
-                    err=err,
-                ),
-                message_type='comment',
-                subtype_xmlid='mail.mt_note',
-            )
+            self._log_elks_org_failure(err, getattr(e, "diagnostics", {}))
 
     def action_cancel(self):
         """Cancel the contribution."""

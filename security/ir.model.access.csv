@@ -14,3 +14,4 @@ access_charity_dashboard_user,elks.charity.dashboard.user,model_elks_charity_das
 access_charity_dashboard_sec,elks.charity.dashboard.sec,model_elks_charity_dashboard,group_elkscharity_secretary,1,0,0,0
 access_quick_entry_wizard_user,elks.charity.quick.entry.wizard.user,model_elks_charity_quick_entry_wizard,group_elkscharity_user,1,1,1,1
 access_quick_entry_wizard_sec,elks.charity.quick.entry.wizard.sec,model_elks_charity_quick_entry_wizard,group_elkscharity_secretary,1,1,1,1
+access_elks_org_setup_wizard_sec,elks.charity.elks_org_setup_wizard.sec,model_elks_charity_elks_org_setup_wizard,group_elkscharity_secretary,1,1,1,1

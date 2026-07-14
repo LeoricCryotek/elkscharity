@@ -129,4 +129,12 @@
               parent="menu_elkscharity_config"
               action="action_elks_charity_category"
               sequence="10"/>
+
+    <!-- Self-install wizard for Playwright + Chromium (used by the
+         elks.org auto-push).  One-time setup step for the server. -->
+    <menuitem id="menu_elkscharity_elks_org_setup"
+              name="Elks.org Push Setup"
+              parent="menu_elkscharity_config"
+              action="action_elks_org_setup_wizard"
+              sequence="80"/>
 </odoo>

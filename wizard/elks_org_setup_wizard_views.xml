@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_elks_org_setup_wizard_form" model="ir.ui.view">
+        <field name="name">elks.charity.elks_org_setup_wizard.form</field>
+        <field name="model">elks.charity.elks_org_setup_wizard</field>
+        <field name="arch" type="xml">
+            <form string="Elks.org Push — Server Setup">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Elks.org Push — Server Setup</h1>
+                        <p class="text-muted">
+                            One-time install of the headless browser
+                            used by the elks.org auto-push.  Runs pip
+                            install playwright and downloads Chromium
+                            into this Odoo venv (~180 MB, ~2 minutes).
+                        </p>
+                    </div>
+
+                    <group string="Current Status">
+                        <group>
+                            <field name="playwright_installed"
+                                   widget="boolean_toggle"
+                                   readonly="1"/>
+                            <field name="playwright_version" readonly="1"
+                                   invisible="not playwright_installed"/>
+                            <field name="chromium_installed"
+                                   widget="boolean_toggle"
+                                   readonly="1"/>
+                            <field name="chromium_path" readonly="1"
+                                   invisible="not chromium_installed"/>
+                        </group>
+                    </group>
+
+                    <div class="alert alert-info" role="alert">
+                        <strong>What "Run Installation" does:</strong>
+                        <ol style="margin-bottom: 0;">
+                            <li>Runs <code>pip install playwright</code>
+                                inside this Odoo venv.  Adds ~20 MB.</li>
+                            <li>Runs <code>playwright install chromium</code>
+                                to download the headless browser binary.
+                                Adds ~180 MB.  Takes 1–3 minutes on a
+                                typical connection.</li>
+                            <li>Prints the sudo command your admin runs
+                                ONCE to add the Chromium system libraries
+                                (this step needs root, so we can't do it
+                                from here).</li>
+                        </ol>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <button name="action_check_status"
+                                type="object"
+                                string="Refresh Status"
+                                class="btn-secondary"
+                                icon="fa-refresh"/>
+                        <button name="action_install_all"
+                                type="object"
+                                string="Run Installation"
+                                class="btn-primary"
+                                icon="fa-download"
+                                confirm="This will download Chromium
+                                (~180 MB) into the Odoo venv.  Takes
+                                1–3 minutes and will lock this Odoo
+                                worker until finished.  Proceed?"/>
+                    </div>
+
+                    <field name="installation_log" widget="text"
+                           readonly="1"
+                           placeholder="Installation output will appear here after you click 'Run Installation'."
+                           options="{'resizable': false}"
+                           style="font-family: Consolas, monospace; font-size: 12px; min-height: 400px; background: #f5f5f5; padding: 12px; border-radius: 4px;"/>
+
+                    <div class="alert alert-secondary mt-3" role="alert">
+                        <small>
+                            <strong>System library step:</strong> the
+                            Chromium binary needs a handful of Linux
+                            system libraries (libnss3, libatk1, libx11,
+                            etc.) to actually run.  Those live outside
+                            the Odoo venv and need to be installed via
+                            <code>apt</code>, which requires root.
+                            After the button runs, copy the sudo command
+                            from the output and hand it to your server
+                            admin to run once.
+                        </small>
+                    </div>
+                </sheet>
+                <footer>
+                    <button string="Close"
+                            class="btn-secondary"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_elks_org_setup_wizard"
+            model="ir.actions.act_window">
+        <field name="name">Elks.org Push Setup</field>
+        <field name="res_model">elks.charity.elks_org_setup_wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

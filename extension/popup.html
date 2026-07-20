@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Elks.org Push</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Roboto, sans-serif;
+    width: 340px;
+    padding: 12px 14px;
+    margin: 0;
+    color: #222;
+    background: #fafafa;
+  }
+  h1 {
+    font-size: 15px;
+    margin: 0 0 8px 0;
+    color: #6a2020;
+  }
+  label {
+    display: block;
+    font-size: 11px;
+    color: #666;
+    margin-top: 10px;
+    margin-bottom: 2px;
+  }
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 7px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-family: monospace;
+  }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #999;
+    background: #fff;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  button.primary {
+    background: #6a2020;
+    color: #fff;
+    border-color: #6a2020;
+  }
+  button:hover { background: #f0f0f0; }
+  button.primary:hover { background: #5a1a1a; }
+  #enabled-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 12px;
+  }
+  #status {
+    margin-top: 12px;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-left: 4px solid #999;
+    border-radius: 2px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+  #status.idle    { border-left-color: #4a4; }
+  #status.pushing { border-left-color: #46a; }
+  #status.error, #status.bad_api_key,
+  #status.odoo_error, #status.no_elks_session,
+  #status.not_configured, #status.partial {
+    border-left-color: #c33;
+  }
+  #status.disabled { border-left-color: #aaa; color: #666; }
+  .status-state {
+    font-weight: 600;
+    text-transform: capitalize;
+    margin-bottom: 3px;
+  }
+  .muted { color: #888; font-size: 11px; }
+  .test-results { margin-top: 8px; font-size: 11px; color: #444; }
+  a { color: #6a2020; }
+</style>
+</head>
+<body>
+  <h1>Elks.org Push — Lewiston Lodge 896</h1>
+
+  <label for="odoo-url">Odoo URL</label>
+  <input id="odoo-url" type="text"
+         placeholder="https://www.lewistonelks896.com"/>
+
+  <label for="api-key">API Key
+    <span class="muted">(from Preferences → Elks.org Credentials)</span>
+  </label>
+  <input id="api-key" type="password"
+         placeholder="paste API key…"/>
+
+  <div id="enabled-row">
+    <input id="enabled" type="checkbox"/>
+    <label for="enabled" style="margin:0;font-size:12px;color:#222;">
+      Enabled — poll Odoo every minute and push
+    </label>
+  </div>
+
+  <div class="row">
+    <button id="save" class="primary">Save Settings</button>
+    <button id="run-now">Push Now</button>
+  </div>
+  <div class="row">
+    <button id="test-odoo">Test Odoo Key</button>
+    <button id="test-elks">Test Elks.org Session</button>
+  </div>
+
+  <div id="status">
+    <div class="status-state">Loading…</div>
+  </div>
+
+  <p class="muted" style="margin-top:14px;">
+    Keep an elks.org tab logged in.  Pushes queue in Odoo and get
+    submitted automatically here.
+  </p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -5,19 +5,89 @@
         <field name="name">elks.charity.elks_org_setup_wizard.form</field>
         <field name="model">elks.charity.elks_org_setup_wizard</field>
         <field name="arch" type="xml">
-            <form string="Elks.org Push — Server Setup">
+            <form string="Elks.org Push Setup">
                 <sheet>
                     <div class="oe_title">
-                        <h1>Elks.org Push — Server Setup</h1>
+                        <h1>Elks.org Push Setup</h1>
                         <p class="text-muted">
-                            One-time install of the headless browser
-                            used by the elks.org auto-push.  Runs pip
-                            install playwright and downloads Chromium
-                            into this Odoo venv (~180 MB, ~2 minutes).
+                            Two integration paths for pushing charity
+                            contributions to elks.org.  <strong>Use the
+                            Chrome extension</strong> — it's the reliable
+                            one.  Server-side Playwright is kept as a
+                            fallback in case elks.org drops their bot
+                            detection.
                         </p>
                     </div>
 
-                    <group string="Current Status">
+                    <!-- ═══════════════════════════════════════════ -->
+                    <!-- PRIMARY PATH — Chrome extension               -->
+                    <!-- ═══════════════════════════════════════════ -->
+                    <div class="alert alert-success" role="alert">
+                        <h3 style="margin-top:0;">✅ Recommended: Chrome Extension</h3>
+                        <p>
+                            The extension runs in the Secretary's Chrome
+                            browser.  When elks.org is logged in in
+                            another tab, the extension quietly polls
+                            Odoo for validated contributions and submits
+                            them using the browser's live session.  No
+                            elks.org credentials stored anywhere.
+                        </p>
+                        <p style="margin-bottom:0;">
+                            <strong>One-time install per Secretary:</strong>
+                        </p>
+                        <ol>
+                            <li>
+                                Get the extension folder onto the
+                                Secretary's computer.  Simplest:
+                                <code>git clone</code> the elkscharity
+                                repo, then point Chrome at the
+                                <code>extension/</code> subfolder.
+                                Or zip it up on the server and email
+                                it over.
+                            </li>
+                            <li>
+                                In Chrome, open <code>chrome://extensions/</code>.
+                            </li>
+                            <li>
+                                Turn on <strong>Developer mode</strong>
+                                (top right).
+                            </li>
+                            <li>
+                                Click <strong>Load unpacked</strong>,
+                                pick the <code>extension/</code> folder.
+                            </li>
+                            <li>
+                                The "Elks.org Push" icon appears in
+                                the toolbar.
+                            </li>
+                            <li>
+                                In Odoo, go to <em>Preferences → Elks.org
+                                Credentials → Regenerate API Key</em> and
+                                copy the shown key.
+                            </li>
+                            <li>
+                                Click the extension icon.  Paste the
+                                Odoo URL + API Key.  Check <em>Enabled</em>,
+                                click <em>Save</em>.
+                            </li>
+                            <li>
+                                Log into <a href="https://www.elks.org"
+                                target="_blank">elks.org</a> in a normal
+                                tab.  Leave it open.
+                            </li>
+                        </ol>
+                        <p>
+                            <strong>Extension folder path on this server:</strong>
+                            <br/>
+                            <field name="extension_path_hint"
+                                   readonly="1" nolabel="1"/>
+                        </p>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════ -->
+                    <!-- LEGACY PATH — Playwright                     -->
+                    <!-- ═══════════════════════════════════════════ -->
+                    <group string="Server-Side Playwright (Legacy Fallback)">
                         <group>
                             <field name="playwright_installed"
                                    widget="boolean_toggle"
@@ -32,20 +102,14 @@
                         </group>
                     </group>
 
-                    <div class="alert alert-info" role="alert">
-                        <strong>What "Run Installation" does:</strong>
-                        <ol style="margin-bottom: 0;">
-                            <li>Runs <code>pip install playwright</code>
-                                inside this Odoo venv.  Adds ~20 MB.</li>
-                            <li>Runs <code>playwright install chromium</code>
-                                to download the headless browser binary.
-                                Adds ~180 MB.  Takes 1–3 minutes on a
-                                typical connection.</li>
-                            <li>Prints the sudo command your admin runs
-                                ONCE to add the Chromium system libraries
-                                (this step needs root, so we can't do it
-                                from here).</li>
-                        </ol>
+                    <div class="alert alert-warning" role="alert">
+                        <strong>Heads-up:</strong> as of July 2026,
+                        elks.org's login blocks Playwright-driven
+                        Chromium — even with stealth-mode overrides.
+                        Server-side push is <em>not currently working</em>.
+                        Install it anyway if you want to test whether
+                        elks.org has since relaxed the check; otherwise
+                        just use the Chrome extension.
                     </div>
 
                     <div style="margin: 20px 0;">
@@ -56,38 +120,26 @@
                                 icon="fa-refresh"/>
                         <button name="action_install_all"
                                 type="object"
-                                string="Run Installation"
-                                class="btn-primary"
+                                string="Install Playwright + Chromium"
+                                class="btn-secondary"
                                 icon="fa-download"
                                 confirm="This will download Chromium
                                 (~180 MB) into the Odoo venv.  Takes
-                                1–3 minutes and will lock this Odoo
-                                worker until finished.  Proceed?"/>
+                                1–3 minutes.  Server-side push is
+                                currently blocked by elks.org's bot
+                                detection — you may not need this.
+                                Proceed?"/>
                     </div>
 
                     <field name="installation_log" widget="text"
                            readonly="1"
-                           placeholder="Installation output will appear here after you click 'Run Installation'."
+                           placeholder="Playwright installation output will appear here (only if you click Install)."
                            options="{'resizable': false}"
-                           style="font-family: Consolas, monospace; font-size: 12px; min-height: 400px; background: #f5f5f5; padding: 12px; border-radius: 4px;"/>
-
-                    <div class="alert alert-secondary mt-3" role="alert">
-                        <small>
-                            <strong>System library step:</strong> the
-                            Chromium binary needs a handful of Linux
-                            system libraries (libnss3, libatk1, libx11,
-                            etc.) to actually run.  Those live outside
-                            the Odoo venv and need to be installed via
-                            <code>apt</code>, which requires root.
-                            After the button runs, copy the sudo command
-                            from the output and hand it to your server
-                            admin to run once.
-                        </small>
-                    </div>
+                           style="font-family: Consolas, monospace; font-size: 12px; min-height: 200px; background: #f5f5f5; padding: 12px; border-radius: 4px;"/>
                 </sheet>
                 <footer>
                     <button string="Close"
-                            class="btn-secondary"
+                            class="btn-primary"
                             special="cancel"/>
                 </footer>
             </form>

@@ -54,6 +54,16 @@ class ElksOrgSetupWizard(models.TransientModel):
         help="Command an admin runs once (needs sudo) to install "
              "Chromium's Linux runtime libraries.",
     )
+    extension_path_hint = fields.Char(
+        "Extension Folder Path (on server)",
+        compute="_compute_status",
+        help="Where the Chrome extension source lives on this Odoo "
+             "server.  You need this path when 'Load unpacked' asks "
+             "for a folder — but only if the Secretary sits at the "
+             "server console.  Normally, ship the extension folder "
+             "to the Secretary's laptop (git clone, or zip + email) "
+             "and point Load unpacked at THEIR local copy.",
+    )
 
     # ------------------------------------------------------------------
     # Status probe
@@ -82,6 +92,20 @@ class ElksOrgSetupWizard(models.TransientModel):
                 "sudo %s -m playwright install-deps chromium"
                 % sys.executable
             )
+
+            # Location of the extension folder inside the module.
+            # Under `odoo.modules` the addons path is discoverable
+            # via ir.module.module; simplest correct answer is to
+            # resolve the module base dir at runtime.
+            try:
+                from odoo.modules.module import get_module_path
+                mod_path = get_module_path("elkscharity") or ""
+                rec.extension_path_hint = (
+                    os.path.join(mod_path, "extension")
+                    if mod_path else False
+                )
+            except Exception:
+                rec.extension_path_hint = False
 
     @staticmethod
     def _chromium_binary_path():

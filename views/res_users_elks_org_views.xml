@@ -17,7 +17,20 @@
                 <page string="Elks.org Credentials"
                       name="elks_org_credentials">
                     <group>
-                        <group string="Auto-Push Settings">
+                        <group string="Browser Extension (Recommended)">
+                            <field name="x_elks_org_api_key"
+                                   password="True"
+                                   readonly="1"/>
+                            <field name="x_elks_org_api_key_created"
+                                   readonly="1"
+                                   invisible="not x_elks_org_api_key_created"/>
+                            <button name="action_regenerate_elks_org_api_key"
+                                    type="object"
+                                    string="Regenerate API Key"
+                                    class="btn-primary"
+                                    confirm="Any Elks.org Push Chrome extension using the old key will stop working until you paste in the new one.  Continue?"/>
+                        </group>
+                        <group string="Server-Side Auto-Push (Legacy)">
                             <field name="x_elks_org_enabled"/>
                             <field name="x_elks_org_login"
                                    placeholder="Your elks.org member number or email"/>
@@ -30,38 +43,33 @@
                         </group>
                     </group>
                     <p class="text-muted small">
-                        When <em>Auto-Push Charity Entries to Elks.org</em>
-                        is enabled, confirming a charity contribution in
-                        this Odoo instance automatically opens a headless
-                        Chromium browser, logs into
-                        <a href="https://www.elks.org/grandlodge/charity/local.cfm"
-                           target="_blank">
-                            elks.org's Local Lodge Reporting page
-                        </a>
-                        using the credentials above, and submits the
-                        entry through the actual form.
+                        <strong>Recommended path — Chrome extension:</strong>
+                        install the Elks.org Push extension in your browser
+                        (see <em>Elks Charity → Configuration → Elks.org
+                        Push Setup</em> for install instructions), paste
+                        the API key above into the extension's popup, and
+                        keep an elks.org tab open + logged in.  The
+                        extension polls Odoo for pending submissions and
+                        pushes them silently using your real browser
+                        session.  Bypasses elks.org's server-side bot
+                        detection because it IS a real browser doing real
+                        submissions.
                     </p>
                     <p class="text-muted small">
-                        <strong>Server prerequisite:</strong> Playwright
-                        + Chromium must be installed on the Odoo server.
-                        One-time setup, run as the odoo user:<br/>
-                        <code>&lt;odoo-venv&gt;/bin/pip install playwright</code><br/>
-                        <code>&lt;odoo-venv&gt;/bin/playwright install chromium</code><br/>
-                        <code>&lt;odoo-venv&gt;/bin/playwright install-deps chromium</code>
-                        <br/>Then restart Odoo.  For bulk pushes select
-                        multiple rows in the Contributions list and use
-                        <em>Actions → Push Selected to Elks.org (Bulk)</em>
-                        — Chromium logs in ONCE for the whole batch.
+                        <strong>Legacy path — server-side auto-push:</strong>
+                        the credentials below drive a Playwright/Chromium
+                        login on the Odoo server.  Currently blocked by
+                        elks.org's bot detection (as of July 2026).  Kept
+                        as a fallback in case elks.org drops the check.
+                        If left unused, "Mark Submitted Manually" on each
+                        contribution is always available.
                     </p>
                     <p class="text-muted small">
-                        <strong>Security note:</strong> your password is
-                        stored in the Odoo database.  Any Odoo administrator
-                        could theoretically read it.  If your lodge's
-                        security policy requires zero credential storage,
-                        leave <em>Auto-Push</em> disabled and use the
-                        "Mark Submitted Manually" button on each
-                        contribution after you submit it on elks.org
-                        yourself.
+                        <strong>Security note:</strong> the API key gives
+                        the extension full push privileges as your user.
+                        Treat it like a password.  Regenerate it if your
+                        computer is compromised or you install the
+                        extension somewhere you don't fully control.
                     </p>
                 </page>
             </xpath>
@@ -82,7 +90,18 @@
                 <page string="Elks.org Credentials"
                       name="elks_org_credentials">
                     <group>
-                        <group>
+                        <group string="Browser Extension">
+                            <field name="x_elks_org_api_key"
+                                   password="True"
+                                   readonly="1"/>
+                            <field name="x_elks_org_api_key_created"
+                                   readonly="1"/>
+                            <button name="action_regenerate_elks_org_api_key"
+                                    type="object"
+                                    string="Regenerate API Key"
+                                    class="btn-primary"/>
+                        </group>
+                        <group string="Server-Side Auto-Push (Legacy)">
                             <field name="x_elks_org_enabled"/>
                             <field name="x_elks_org_login"/>
                             <field name="x_elks_org_password"

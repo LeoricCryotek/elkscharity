@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Elks.org Push (Lewiston Lodge 896)",
+  "short_name": "Elks.org Push",
+  "version": "1.0.0",
+  "description": "Submits Odoo-validated charity contributions to elks.org Local Lodge Reporting using your active browser session. Companion to the elkscharity Odoo module.",
+  "author": "Danny Santiago",
+  "icons": {
+    "16":  "icons/icon-16.png",
+    "48":  "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Elks.org Push",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16":  "icons/icon-16.png",
+      "48":  "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "alarms",
+    "storage",
+    "cookies",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://www.elks.org/*",
+    "http://*/*",
+    "https://*/*"
+  ]
+}

@@ -2,12 +2,23 @@
 <odoo>
     <!-- ────────── Open-Dashboard Server Action ──────────
          Wraps action_charity_dashboard with a Python call that
-         injects the current lodge year into the search panel.   -->
+         injects the current lodge year into the search panel.
+
+         groups_id MUST list every group whose users are allowed to
+         run this action.  Odoo 19 gates state=code server actions
+         on this field — without it, only the base System group can
+         execute the code, so non-admin Secretaries and Volunteers
+         hit "You are not allowed to access 'Server Action'" the
+         instant they click the Elks Charity menu.  Regression seen
+         2026-07-28.                                                   -->
     <record id="action_charity_dashboard_landing" model="ir.actions.server">
         <field name="name">Charity Dashboard</field>
         <field name="model_id" ref="model_elks_charity_dashboard"/>
         <field name="state">code</field>
         <field name="code">action = model.action_open_dashboard()</field>
+        <field name="groups_id"
+               eval="[(4, ref('group_elkscharity_user')),
+                      (4, ref('group_elkscharity_secretary'))]"/>
     </record>
 
     <!-- Root: Elks Charity -->

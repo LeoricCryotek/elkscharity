@@ -1,38 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- ────────── Open-Dashboard Server Action ──────────
-         Wraps action_charity_dashboard with a Python call that
-         injects the current lodge year into the search panel.
-
-         groups_id MUST list every group whose users are allowed to
-         run this action.  Odoo 19 gates state=code server actions
-         on this field — without it, only the base System group can
-         execute the code, so non-admin Secretaries and Volunteers
-         hit "You are not allowed to access 'Server Action'" the
-         instant they click the Elks Charity menu.  Regression seen
-         2026-07-28.                                                   -->
-    <record id="action_charity_dashboard_landing" model="ir.actions.server">
-        <field name="name">Charity Dashboard</field>
-        <field name="model_id" ref="model_elks_charity_dashboard"/>
-        <field name="state">code</field>
-        <field name="code">action = model.action_open_dashboard()</field>
-        <field name="groups_id"
-               eval="[(4, ref('group_elkscharity_user')),
-                      (4, ref('group_elkscharity_secretary'))]"/>
-    </record>
+    <!-- Root menu points DIRECTLY at the dashboard act_window —
+         no ir.actions.server wrapper.  We used to wrap it in a code
+         server action so we could inject a dynamic current_lodge_year
+         value, but Odoo 19 doesn't expose groups_id on ir.actions.server,
+         which meant only System admins could run it.  The
+         "Current Lodge Year" filter in the search view does its own
+         date math and is now auto-activated via the act_window's
+         context={'search_default_filter_current_lodge_year': 1}
+         (see charity_dashboard_views.xml).  Regression seen
+         2026-07-28 on lewistonelks896.com. -->
 
     <!-- Root: Elks Charity -->
     <menuitem id="menu_elkscharity_root"
               name="Elks Charity"
               sequence="55"
-              action="action_charity_dashboard_landing"
+              action="action_charity_dashboard"
               web_icon="elkscharity,static/description/icon.png"
               groups="group_elkscharity_user"/>
 
     <menuitem id="menu_elkscharity_dashboard"
               name="Dashboard"
               parent="menu_elkscharity_root"
-              action="action_charity_dashboard_landing"
+              action="action_charity_dashboard"
               sequence="5"/>
 
     <!-- Direct shortcut to the BPOE Data Collection Survey form so

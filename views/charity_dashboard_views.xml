@@ -276,9 +276,14 @@
         <field name="res_model">elks.charity.dashboard</field>
         <field name="view_mode">kanban,list,pivot</field>
         <field name="search_view_id" ref="view_charity_dashboard_search"/>
-        <!-- Default landing context is set by action_open_dashboard() in
-             models/charity_dashboard.py which injects current_lodge_year
-             and search_default_filter_current_lodge_year=1. -->
+        <!-- Activate the "Current Lodge Year" saved filter by default.
+             The filter itself lives in the search view and does its
+             own date math, so no dynamic Python context needed —
+             which lets us skip the ir.actions.server wrapper the menu
+             used to route through (server actions in Odoo 19 don't
+             expose a groups_id field, so gating them per-user got
+             ugly). -->
+        <field name="context">{'search_default_filter_current_lodge_year': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No charity activity yet

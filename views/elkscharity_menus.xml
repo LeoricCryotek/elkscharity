@@ -91,28 +91,12 @@
               action="action_charity_hours_unified"
               sequence="10"/>
 
-    <!-- "Hours Awaiting Validation" retired in 19.0.6.5 — charity
-         attendance auto-validates on save now, so this list would
-         always be empty.  Menu record kept as a comment for a few
-         releases in case the workflow needs to come back. -->
-    <!--
-    <menuitem id="menu_elkscharity_hours_validate"
-              name="Hours Awaiting Validation"
-              parent="menu_elkscharity_hours"
-              action="action_charity_hours_pending"
-              sequence="20"
-              groups="group_elkscharity_secretary"/>
-    -->
-    <!-- active="False" hides the menu without deleting the XML id, so
-         nothing that references the id from other modules breaks. -->
-    <record id="menu_elkscharity_hours_validate" model="ir.ui.menu">
-        <field name="name">Hours Awaiting Validation (retired)</field>
-        <field name="active">False</field>
-        <field name="parent_id" ref="menu_elkscharity_hours"/>
-        <field name="action" ref="action_charity_hours_pending"/>
-        <field name="sequence">20</field>
-        <field name="groups_id" eval="[(6, 0, [ref('group_elkscharity_secretary')])]"/>
-    </record>
+    <!-- "Hours Awaiting Validation" menu retired 19.0.6.5, record
+         fully removed 19.0.6.10.  Charity attendance auto-validates
+         on save so this list would always be empty.  Any existing
+         menu record from prior installs is removed via
+         migrations/19.0.6.10/post-migrate.py.  Nothing else in the
+         codebase references the xmlid. -->
 
     <menuitem id="menu_elkscharity_missing_category"
               name="Missing Charity Category"

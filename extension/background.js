@@ -130,6 +130,50 @@ async function elksSessionAlive() {
     } finally { clearTimeout(to); }
 }
 
+// Helper: pull an inline error message out of an elks.org response
+// body.  Returns a short string (trimmed, single-line) or null.
+// Elks.org uses ColdFusion which surfaces validation errors as
+// JavaScript alert() calls or as <div class="alert">/<span class=
+// "error"> banners.  Try DOMParser first; regex fallbacks after.
+function extractElksErrorMessage(html) {
+    // ColdFusion cfform errors are pushed to a JS array and
+    // shown via alert().  Match the array-push lines directly.
+    // Example: _CF_error_messages[0] = "Please submit the ...";
+    const cfMatches = [
+        ...html.matchAll(
+            /_CF_error_messages\[\d+\]\s*=\s*['"]([^'"]{5,300})['"]/g
+        ),
+    ].map((m) => m[1].trim());
+    if (cfMatches.length) {
+        return cfMatches.slice(0, 3).join(" | ");
+    }
+    // Bootstrap alert banners.
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        const banner = doc.querySelector(
+            ".alert-danger, .alert-warning, div.error, span.error, " +
+            ".Message[style*='red'], .errorMessage"
+        );
+        if (banner) {
+            const t = (banner.textContent || "").trim().replace(/\s+/g, " ");
+            if (t.length >= 5 && t.length <= 300) return t;
+        }
+        // Look for any <script>alert('...')</script> that CF might inject.
+        for (const s of doc.querySelectorAll("script")) {
+            const c = s.textContent || "";
+            const m = c.match(/alert\s*\(\s*['"]([^'"]{5,300})['"]/);
+            if (m) return m[1].trim();
+        }
+    } catch (_) {}
+    // Regex fallback for the same alert pattern outside <script>.
+    const alertMatch = html.match(
+        /alert\s*\(\s*['"]([^'"]{5,300})['"]/
+    );
+    if (alertMatch) return alertMatch[1].trim();
+    return null;
+}
+
 // Helper: extract the theUID token from an elks.org form HTML.
 // Returns the token string or null.  DOMParser first, then regex
 // fallbacks for weird attribute orderings.
@@ -263,7 +307,11 @@ async function submitOne(formUrl, payload) {
         });
         const body = await postResp.text();
         const low = body.toLowerCase();
-        // Success signals from the Python client, ported.
+        // Success signal: the "Days Since Last Charitable Event"
+        // banner appears on the landing page that elks.org returns
+        // AFTER a successful submission.  Extra guard: the form's
+        // programid select is NOT present on that landing (that
+        // would mean we're still on the entry form → rejection).
         if (low.includes("days since last charitable event") &&
             !low.includes('name="programid"')) {
             const m = low.match(/recordid[^0-9]*(\d+)/);
@@ -272,19 +320,34 @@ async function submitOne(formUrl, payload) {
                 confirmation: m ? "recordID=" + m[1] : "OK",
             };
         }
-        if (low.includes("error") &&
-            (low.includes("required") || low.includes("please"))) {
+        // Rejection path — pull the actual server-side error text
+        // out of the response so we can show it inline instead of
+        // making the Secretary open an HTML attachment.  Try a few
+        // known elks.org error-container patterns.
+        let elksMsg = extractElksErrorMessage(body);
+        // If the form re-rendered (still shows programID select),
+        // it means elks.org rejected our POST and returned the form
+        // page with an inline error.
+        const formRedisplayed = low.includes('name="programid"');
+        if (formRedisplayed || elksMsg) {
             return {
                 ok: false,
-                error: "elks.org rejected the submission — see " +
-                       "attached HTML for details",
-                html: body.slice(0, 8000),
+                error: elksMsg
+                    ? ("elks.org: " + elksMsg)
+                    : ("elks.org rejected the submission (form " +
+                       "re-rendered with no extractable message — " +
+                       "check attached HTML)"),
+                html: body.slice(0, 20000),
             };
         }
-        // Ambiguous but 200 — treat as success but flag it.
+        // Truly ambiguous 200 — treat as unverified success and
+        // include a chunk of the response in the confirmation for
+        // audit.  User can spot-check on elks.org.
         return {
             ok: true,
-            confirmation: "OK (unverified — please spot-check on elks.org)",
+            confirmation:
+                "OK (unverified — " + postResp.status +
+                ", " + body.length + " chars)",
         };
     } catch (e) {
         return {

@@ -1,17 +1,24 @@
 # -*- coding: utf-8 -*-
-"""Setup helper for the Elks.org Push Chrome extension.
-
-Displays the on-server path of the extension folder so a Secretary
-setting things up can point Chrome's "Load unpacked" at the right
-place (or ZIP + copy to a workstation that will actually run the
-browser).  Nothing to install on the server — all the auto-push
-mechanics live in the extension itself.
-
-History: earlier versions (19.0.2.x) probed for Playwright + Chromium
-and could install them from this wizard.  Removed in 19.0.6.2 after
-elks.org's bot detection made the server-side path unusable.  See
-migrations/19.0.5.0/pre-migrate.py for the field cleanup.
-"""
+# =============================================================================
+# === HUMAN ===
+# The "Elks.org Push Setup" wizard a Secretary opens from Configuration
+# to see step-by-step Chrome extension install instructions plus the
+# on-server path to the extension/ folder so they know where to point
+# Chrome's "Load unpacked" (or which folder to zip up and email to a
+# Secretary on another computer).  Nothing to install on the server —
+# all the auto-push mechanics live inside the extension.
+#
+# === AI AGENT ===
+# TransientModel with a single computed field extension_path_hint,
+# resolved via odoo.modules.module.get_module_path('elkscharity').  The
+# form view lives in elks_org_setup_wizard_views.xml and does all the
+# storytelling — this model exists mostly to give the view a backing
+# record.  History: 19.0.2.x versions of this wizard probed and installed
+# Playwright + Chromium via subprocess; that code was removed in 19.0.6.2
+# after the server-side push path was retired.  See
+# migrations/19.0.5.0/pre-migrate.py for the field cleanup.
+# =============================================================================
+"""Setup helper for the Elks.org Push Chrome extension — see file header."""
 import logging
 import os
 

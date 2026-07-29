@@ -158,13 +158,47 @@
          demand from the Configuration menu.  Useful when the
          migration didn't fire (e.g., upgrading module while Odoo
          thought the version was already applied) or after bulk
-         importing historical attendance. -->
+         importing historical attendance.
+
+         Logic is INLINED here rather than calling a method on the
+         model because -u elkscharity reloads XML/data but does not
+         re-import Python code; if a fresh method was just added,
+         the XML would upgrade before the Python class did, giving
+         AttributeError on click.  Inlining sidesteps that. -->
     <record id="action_rebuild_attendance_contributions"
             model="ir.actions.server">
         <field name="name">Rebuild Attendance Contributions</field>
         <field name="model_id" ref="hr_attendance.model_hr_attendance"/>
         <field name="state">code</field>
-        <field name="code">action = env['hr.attendance'].sudo().rebuild_attendance_contributions_button()</field>
+        <field name="code">
+Att = env['hr.attendance'].sudo()
+Contrib = env['elks.charity.contribution'].sudo()
+before = Contrib.search_count([('x_source', '=', 'attendance')])
+historical = Att.search([
+    ('x_charity_task_id', '!=', False),
+    ('x_validated', '=', True),
+    ('check_out', '!=', False),
+])
+if historical:
+    historical._ensure_attendance_contribution()
+after = Contrib.search_count([('x_source', '=', 'attendance')])
+delta = after - before
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Rebuild Attendance Contributions',
+        'message': (
+            'Scanned %d validated charity attendance row(s).  '
+            'Attendance-sourced contributions: %d before -> %d '
+            'after (%+d new/updated).  Refresh "Pending Elks.org '
+            'Push" to see them.'
+        ) % (len(historical), before, after, delta),
+        'sticky': True,
+        'type': 'success' if delta &gt;= 0 else 'warning',
+    },
+}
+        </field>
     </record>
 
     <menuitem id="menu_elkscharity_rebuild_att_contribs"

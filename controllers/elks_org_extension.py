@@ -1,28 +1,27 @@
 # -*- coding: utf-8 -*-
-"""JSON API for the Elks.org Push Chrome extension.
-
-Flow:
-  1. User installs the Chrome extension, pastes their API key
-     (generated on their user preferences form).
-  2. Extension polls  GET /elkscharity/ext/v1/pending  every 60s.
-  3. Extension has a live elks.org tab open.  For each pending
-     contribution the server returned, extension makes a same-origin
-     fetch POST to elks.org's form using the user's active session
-     cookies.
-  4. Extension reports the outcome back to Odoo via
-     POST /elkscharity/ext/v1/mark_pushed  (success)
-     POST /elkscharity/ext/v1/mark_failed  (error text)
-
-Auth: the extension sends `X-Elks-Api-Key: <key>` on every request.
-Odoo looks the key up on res.users via
-`_elks_org_user_for_api_key(key)`.  If found, the request is processed
-as that user; if not, 401.
-
-CORS: `Access-Control-Allow-Origin: *` is safe here because
-authentication is via header (not cookies) — no browser will send
-the API key without our extension explicitly setting it.  We also
-explicitly allow the header so the CORS preflight succeeds.
-"""
+# =============================================================================
+# === HUMAN ===
+# The Odoo-side "brain" for the Elks.org Push Chrome extension.  The
+# extension polls this endpoint every minute asking "any confirmed
+# contributions need submitting?"; when the answer is yes it posts them to
+# elks.org from the Secretary's real browser session (bypassing the bot
+# detection that killed the earlier Playwright approach), then calls back
+# here to mark each one as pushed or failed.  Every call is authenticated
+# with a per-user API key generated on Preferences → Elks.org Credentials.
+# Four endpoints total: whoami, pending, mark_pushed, mark_failed.
+#
+# === AI AGENT ===
+# http.Controller with type='http' + auth='none' + csrf=False.  Auth is
+# custom via X-Elks-Api-Key header → res.users._elks_org_user_for_api_key.
+# All handlers env(user=user.id) after lookup so record rules apply.
+# CORS: Access-Control-Allow-Origin: * (safe because header-auth, not
+# cookie).  Preflight OPTIONS handled generically via <string:endpoint>.
+# PENDING_BATCH_SIZE=25 caps items per poll so the JSON payload stays small.
+# mark_failed also creates an ir.attachment for the returned HTML snippet
+# so the Secretary can inspect elks.org's response body in the chatter.
+# =============================================================================
+"""JSON API for the Elks.org Push Chrome extension.  See file header for
+the flow diagram — this docstring is retained for `pydoc`."""
 import json
 import logging
 

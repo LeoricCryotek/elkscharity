@@ -16,7 +16,11 @@ sources (timesheet lines AND tagged attendance records), de-duped by
 employee + date + task so a clock-in tagged as charity does not get
 double-counted if a timesheet line also exists for the same activity.
 """
+import logging
+
 from odoo import api, fields, models, _
+
+_logger = logging.getLogger(__name__)
 from odoo.exceptions import UserError
 
 

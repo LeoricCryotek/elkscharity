@@ -12,10 +12,136 @@ const $ = (id) => document.getElementById(id);
 async function loadSettings() {
     return new Promise((res) =>
         chrome.storage.local.get(
-            ["odooUrl", "apiKey", "enabled", "dryRun", "lastStatus"],
+            ["odooUrl", "apiKey", "enabled", "dryRun", "lastStatus",
+             "purgeStatus"],
             (v) => res(v || {}),
         )
     );
+}
+
+// Live purge-progress + results box.  Background writes
+// {phase, message, current, total, result} to
+// chrome.storage.local.purgeStatus.  Popup renders it INLINE — no
+// native alert()/confirm() dialogs anywhere in the purge flow.
+async function renderPurgeProgress() {
+    const {purgeStatus} = await loadSettings();
+    const box = document.getElementById("purge-progress");
+    if (!box) return;
+    if (!purgeStatus) {
+        box.style.display = "none";
+        box.innerHTML = "";
+        return;
+    }
+    box.style.display = "block";
+
+    // ── DONE: render final results inline ───────────────────────
+    if (purgeStatus.phase === "done" && purgeStatus.result) {
+        const r = purgeStatus.result;
+        const gap = (r.serverAccepted ?? 0) - (r.verified ?? 0);
+        let warn = "";
+        if (gap > 0) {
+            warn =
+                '<div style="margin-top:6px; padding:6px 8px; ' +
+                'background:#fff5f5; border:1px solid #f5c6cb; ' +
+                'border-radius:3px; color:#7a1e1e; font-size:11px;">' +
+                '⚠ Server accepted ' + gap + ' deletions that did ' +
+                'NOT actually remove records.  Open the extension\'s ' +
+                'service-worker console for the discovered ' +
+                'delete-field name and Edit-page dump.' +
+                '</div>';
+        }
+        let errBlock = "";
+        if (r.errors && r.errors.length) {
+            errBlock =
+                '<div style="margin-top:6px; font-size:11px; ' +
+                'color:#7a1e1e;">' +
+                '<strong>Errors (' + r.errors.length + '):</strong>' +
+                '<div style="max-height:80px; overflow-y:auto; ' +
+                'margin-top:2px; padding:4px; background:#fff5f5; ' +
+                'border:1px solid #f5c6cb; border-radius:3px; ' +
+                'font-family:monospace; font-size:10px; ' +
+                'white-space:pre-wrap;">' +
+                esc(r.errors.slice(0, 8).join("\n")) +
+                (r.errors.length > 8
+                    ? "\n… and " + (r.errors.length - 8) + " more"
+                    : "") +
+                '</div></div>';
+        }
+        let delField = "";
+        if (r.delFieldName) {
+            delField =
+                '<div style="margin-top:4px; font-size:10px; ' +
+                'color:#666;">Delete field discovered: ' +
+                '<code>' + esc(r.delFieldName) + '=' +
+                esc(r.delFieldValue || "") + '</code></div>';
+        }
+        box.innerHTML =
+            '<div style="display:flex; justify-content:space-between; ' +
+            'align-items:center;">' +
+                '<div style="font-weight:600; font-size:11px; ' +
+                'text-transform:uppercase; color:#6a2020;">' +
+                    'Purge complete' +
+                '</div>' +
+                '<button id="purge-dismiss" style="font-size:10px; ' +
+                'padding:2px 6px; background:#fff; border:1px solid ' +
+                '#ccc; border-radius:3px; cursor:pointer; flex:0;">' +
+                    'Dismiss' +
+                '</button>' +
+            '</div>' +
+            '<table style="width:100%; font-size:12px; ' +
+            'margin-top:6px; border-collapse:collapse;">' +
+                purgeRow("Scanned rows", r.scanned) +
+                purgeRow("Unique kept", r.kept) +
+                purgeRow("Duplicates found", r.attempted) +
+                purgeRow("Server accepted", r.serverAccepted) +
+                purgeRow("Verified deleted", r.verified,
+                    r.verified > 0 ? "#0a5d0a" : "#7a1e1e") +
+                purgeRow("Still present", r.stillPresent,
+                    r.stillPresent > 0 ? "#7a1e1e" : "#0a5d0a") +
+            '</table>' +
+            delField + warn + errBlock;
+        const dismiss = document.getElementById("purge-dismiss");
+        if (dismiss) {
+            dismiss.addEventListener("click", () => {
+                chrome.storage.local.set({purgeStatus: null},
+                    () => renderPurgeProgress());
+            });
+        }
+        return;
+    }
+
+    // ── IN-PROGRESS: live status + optional progress bar ────────
+    const pct = purgeStatus.total
+        ? Math.round((purgeStatus.current / purgeStatus.total) * 100)
+        : 0;
+    let bar = "";
+    if (purgeStatus.total && purgeStatus.phase === "deleting") {
+        bar =
+            '<div style="height:6px; background:#eee; ' +
+            'border-radius:3px; margin-top:4px; overflow:hidden;">' +
+            `<div style="width:${pct}%; height:100%; ` +
+            'background:#6a2020;"></div></div>';
+    }
+    box.innerHTML =
+        '<div style="font-weight:600; font-size:11px; ' +
+        'text-transform:uppercase; color:#6a2020;">' +
+        esc(purgeStatus.phase || "purge") +
+        '</div>' +
+        '<div style="font-size:12px; margin-top:2px;">' +
+        esc(purgeStatus.message || "") +
+        '</div>' +
+        bar;
+}
+
+// Small helper for the purge-complete results table row.
+function purgeRow(label, value, color) {
+    const c = color || "#222";
+    return '<tr>' +
+        '<td style="padding:2px 4px; color:#666;">' + esc(label) + '</td>' +
+        '<td style="padding:2px 4px; text-align:right; ' +
+        'font-weight:600; color:' + c + ';">' +
+        esc(String(value ?? 0)) + '</td>' +
+    '</tr>';
 }
 
 // Basic HTML-escape so error text can't inject markup.
@@ -80,13 +206,26 @@ async function init() {
     $("dryRun").checked = !!s.dryRun;
     await renderStatus();
     await refreshPendingCount();
+    await renderPurgeProgress();
 
     // Auto-refresh status + pending count every 3 seconds while
-    // popup is open.
+    // popup is open.  Purge progress refreshes on the same interval
+    // AND immediately on storage change (below) for live 1-of-N updates.
     setInterval(async () => {
         await renderStatus();
         await refreshPendingCount();
+        await renderPurgeProgress();
     }, 3000);
+
+    // Instant-refresh purge progress the moment the background
+    // service worker writes a new status — this is what makes the
+    // "Deleting 47 of 170..." counter tick in real time.
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== "local") return;
+        if (changes.purgeStatus) {
+            renderPurgeProgress();
+        }
+    });
 }
 
 // Live count of pending pushes so the Secretary can see whether
@@ -236,38 +375,105 @@ $("preview-pending").addEventListener("click", async () => {
     chrome.tabs.create({url: url});
 });
 
+// Inline two-click purge flow — no native confirm() dialogs.
+// First click shows a yellow warning panel with a red "Confirm Purge"
+// button + gray "Cancel".  Second click actually kicks off the purge.
+// Results render in #purge-progress via renderPurgeProgress().
+let _purgeArmed = false;
+function armPurge() {
+    _purgeArmed = true;
+    const btn = $("purge-duplicates");
+    btn.textContent = "⚠ Confirm Purge (click again)";
+    btn.style.background = "#c33";
+    btn.style.color = "#fff";
+    btn.style.borderColor = "#a22";
+    // Slide a cancel button in next to it.
+    let cancel = document.getElementById("purge-cancel");
+    if (!cancel) {
+        cancel = document.createElement("button");
+        cancel.id = "purge-cancel";
+        cancel.textContent = "Cancel";
+        cancel.style.marginTop = "4px";
+        cancel.addEventListener("click", disarmPurge);
+        btn.parentNode.appendChild(cancel);
+    }
+    // Also render an inline warning box explaining what will happen.
+    const box = $("purge-progress");
+    box.style.display = "block";
+    box.innerHTML =
+        '<div style="font-weight:600; font-size:11px; ' +
+        'text-transform:uppercase; color:#7a1e1e;">' +
+            'Confirm: purge duplicates' +
+        '</div>' +
+        '<div style="font-size:12px; margin-top:4px; line-height:1.4;">' +
+        'This scans every charity record on elks.org for the ' +
+        'current lodge year, groups rows with IDENTICAL date + ' +
+        'program + counts, and deletes all but the first of each ' +
+        'group.<br/><br/>' +
+        'Records without duplicates will NOT be touched.  ' +
+        '<strong>This cannot be undone.</strong>' +
+        '</div>';
+    // Auto-disarm after 10 seconds so a stale armed state doesn't
+    // fire accidentally on next click.
+    setTimeout(() => {
+        if (_purgeArmed) disarmPurge();
+    }, 10000);
+}
+function disarmPurge() {
+    _purgeArmed = false;
+    const btn = $("purge-duplicates");
+    btn.textContent = "Purge Duplicates on Elks.org";
+    btn.style.background = "#fff3cd";
+    btn.style.color = "";
+    btn.style.borderColor = "#ffc107";
+    const cancel = document.getElementById("purge-cancel");
+    if (cancel) cancel.remove();
+    // Clear the warning box.
+    chrome.storage.local.set({purgeStatus: null},
+        () => renderPurgeProgress());
+}
+
 $("purge-duplicates").addEventListener("click", async () => {
-    const confirmed = confirm(
-        "This will scan every charity record on elks.org for the " +
-        "current lodge year, group rows with IDENTICAL date + " +
-        "program + counts, and DELETE all but the first of each " +
-        "duplicate group.  This is meant to clean up after the " +
-        "pre-1.2.8 false-negative retry bug.\n\n" +
-        "Records without duplicates will NOT be touched.\n\n" +
-        "This cannot be undone.  Proceed?"
+    if (!_purgeArmed) {
+        armPurge();
+        return;
+    }
+    // Second click — actually run the purge.
+    _purgeArmed = false;
+    const cancel = document.getElementById("purge-cancel");
+    if (cancel) cancel.remove();
+    const btn = $("purge-duplicates");
+    btn.textContent = "Purging…";
+    btn.style.background = "#fff3cd";
+    btn.style.color = "";
+    btn.style.borderColor = "#ffc107";
+    btn.disabled = true;
+    // Clear any previous done-state result so the progress box
+    // starts fresh.
+    await new Promise((r) =>
+        chrome.storage.local.set({purgeStatus: {
+            phase: "scanning",
+            message: "Starting…",
+            updated: Date.now(),
+        }}, () => r())
     );
-    if (!confirmed) return;
-    $("purge-duplicates").textContent = "Purging…";
-    $("purge-duplicates").disabled = true;
+    await renderPurgeProgress();
     chrome.runtime.sendMessage({type: "purge_duplicates"}, (resp) => {
-        $("purge-duplicates").textContent = "Purge Duplicates on Elks.org";
-        $("purge-duplicates").disabled = false;
+        btn.textContent = "Purge Duplicates on Elks.org";
+        btn.disabled = false;
         if (!resp) return;
         if (!resp.ok) {
-            alert("Purge failed: " + resp.error);
+            // Render the error inline in the progress box (no alert).
+            chrome.storage.local.set({purgeStatus: {
+                phase: "error",
+                message: "Purge failed: " + (resp.error || "unknown"),
+                updated: Date.now(),
+            }}, () => renderPurgeProgress());
             return;
         }
-        const r = resp.result;
-        alert(
-            "Purge complete.\n\n" +
-            "Scanned:  " + r.scanned + " records\n" +
-            "Kept:     " + r.kept + " unique rows\n" +
-            "Deleted:  " + r.deleted + " duplicates\n" +
-            (r.errors && r.errors.length
-                ? "\nErrors (" + r.errors.length + "):\n  " +
-                  r.errors.slice(0, 5).join("\n  ")
-                : "")
-        );
+        // Success path — background already wrote result to
+        // purgeStatus.  Render it now for immediate feedback.
+        renderPurgeProgress();
     });
 });
 

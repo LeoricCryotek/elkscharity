@@ -366,35 +366,59 @@ async function submitOne(formUrl, payload) {
 
 // ── purge duplicates on elks.org ───────────────────────────────────
 // One-shot cleanup for after a false-negative retry storm left many
-// duplicate records on elks.org.  Fetches the landing page for the
-// current lodge year, groups records by (programDate, programName,
-// programID), and deletes all but the FIRST of each group.  Returns
-// {scanned, kept, deleted, errors}.
+// duplicate records on elks.org.  Groups records by their rendered
+// row content (date + program + counts + $) and deletes all but the
+// FIRST of each group.
 //
-// Elks.org's delete flow: POST to /grandlodge/charity/local.cfm with
-// deleteRecord=Delete This Program + ID=<recordID>.  Confirmation
-// dialog is client-side only; the server accepts a plain POST.
+// v1.3.0 rewrite:
+//   * Live progress ("Deleting 47 of 170...") pushed to chrome.storage
+//     so the popup can render it in real time.
+//   * Delete flow: FETCH each row's edit page first, parse out the
+//     real delete-button field name + any theUID CSRF token, then
+//     POST with the exact fields elks.org expects.  Prior versions
+//     guessed "deleteRecord=Delete This Program" and the server
+//     silently ignored the POST (returned 200 but did nothing) —
+//     hence "170 deleted" alerts with zero actual deletions.
+//   * BULK VERIFY at the end: re-fetch the landing page and count
+//     how many of our target IDs are actually gone.  The alert
+//     reports VERIFIED deletions, not "server said 200".
+//   * Per-record console log ("Purge 47/170: ID=NNN -> deleted") so
+//     the Chrome console can be tailed while purge runs.
 async function purgeDuplicates() {
     const formUrl =
         "https://www.elks.org/grandlodge/charity/local.cfm";
+
+    async function setProgress(patch) {
+        return new Promise((r) =>
+            chrome.storage.local.set({purgeStatus: {
+                ...(patch),
+                updated: Date.now(),
+            }}, () => r())
+        );
+    }
+
+    await setProgress({phase: "scanning", message: "Loading landing page…"});
+    console.log("[Elks.org Purge] Loading landing page…");
+
     const landingResp = await fetch(formUrl, {
         method: "GET",
         credentials: "include",
         redirect: "follow",
     });
     if (landingResp.status !== 200) {
+        await setProgress({phase: "error",
+            message: "Landing page HTTP " + landingResp.status});
         throw new Error("landing page HTTP " + landingResp.status);
     }
     const landingHtml = await landingResp.text();
     if (/elkslogin\.cfm/i.test(landingResp.url || "")) {
+        await setProgress({phase: "error",
+            message: "elks.org session expired — log in first"});
         throw new Error("elks.org session expired — log in first");
     }
 
-    // Regex-parse (DOMParser isn't available in MV3 service workers).
-    // Each record on the landing page renders as a <tr> containing
-    // a form with <input name="ID" value="N">.  Iterate every <tr>,
-    // pull the record ID, and build a fingerprint from the row's
-    // text content for grouping duplicates.
+    // Parse every <tr> containing an ID form input.  Regex-based
+    // because DOMParser isn't available in MV3 service workers.
     const records = [];
     const trRegex = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
     let m;
@@ -406,10 +430,7 @@ async function purgeDuplicates() {
         if (!idMatch) continue;
         const rid = idMatch[1];
         if (!rid || rid === "-1") continue;
-        // Verify it's an EDIT form (not a "Create New" form which
-        // also has an ID input with value=-1 but a different button).
         if (!/name=["']editRecord["']/i.test(rowHtml)) continue;
-        // Strip HTML tags to build a clean text fingerprint.
         const rowText = rowHtml
             .replace(/<script[\s\S]*?<\/script>/gi, "")
             .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -421,57 +442,249 @@ async function purgeDuplicates() {
         records.push({ id: rid, rowText });
     }
 
-    // Group by rowText — an exact-content fingerprint that catches
-    // the retry-storm duplicates (same date, program, counts, $).
+    // Group by row-content fingerprint; keep first of each group.
     const groups = new Map();
     for (const rec of records) {
         const key = rec.rowText;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(rec);
     }
-
-    let scanned = records.length;
+    const toDelete = [];
     let kept = 0;
-    let deleted = 0;
-    const errors = [];
-
-    for (const [key, group] of groups.entries()) {
-        // Keep the FIRST (usually the earliest/original submission);
-        // delete the rest.
+    for (const [, group] of groups.entries()) {
         kept++;
-        for (let i = 1; i < group.length; i++) {
-            const rec = group[i];
-            try {
-                const delBody = new URLSearchParams();
-                delBody.set("ID", rec.id);
-                delBody.set("deleteRecord", "Delete This Program");
-                const delResp = await fetch(formUrl, {
-                    method: "POST",
-                    credentials: "include",
-                    redirect: "follow",
-                    body: delBody.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                });
-                if (delResp.status !== 200) {
-                    errors.push(
-                        `ID ${rec.id}: HTTP ${delResp.status}`
-                    );
-                } else {
-                    deleted++;
-                    console.log(
-                        `[Elks.org Purge] 🗑 deleted duplicate ID=${rec.id}`,
-                    );
-                }
-                await new Promise((r) => setTimeout(r, 300));
-            } catch (e) {
-                errors.push(`ID ${rec.id}: ${e.message}`);
+        for (let i = 1; i < group.length; i++) toDelete.push(group[i]);
+    }
+    const scanned = records.length;
+    const total = toDelete.length;
+
+    console.log(
+        `[Elks.org Purge] Scanned ${scanned} rows, ${kept} unique, ` +
+        `${total} duplicates to delete`,
+    );
+    await setProgress({
+        phase: "planning",
+        message: `Found ${total} duplicates in ${scanned} rows`,
+        current: 0,
+        total,
+    });
+
+    if (total === 0) {
+        await setProgress({
+            phase: "done",
+            message: "No duplicates found",
+            current: 0,
+            total: 0,
+        });
+        return { scanned, kept, deleted: 0, verified: 0, errors: [] };
+    }
+
+    let attempted = 0;
+    let serverAccepted = 0;
+    const errors = [];
+    // Discover the correct delete-field name from the FIRST record's
+    // edit page.  Cache it — every record uses the same edit template.
+    let cachedDelFieldName = null;
+    let cachedDelFieldValue = null;
+
+    for (let i = 0; i < toDelete.length; i++) {
+        const rec = toDelete[i];
+        attempted++;
+        const msg = `Deleting ${i + 1} of ${total} (ID ${rec.id})…`;
+        await setProgress({
+            phase: "deleting",
+            message: msg,
+            current: i + 1,
+            total,
+        });
+        console.log(`[Elks.org Purge] ${msg}`);
+
+        try {
+            // Step 1: Fetch the edit page to discover the delete
+            // button's real field name + any per-request theUID.
+            const editBody = new URLSearchParams();
+            editBody.set("ID", rec.id);
+            editBody.set("editRecord", "Edit");
+            const editResp = await fetch(formUrl, {
+                method: "POST",
+                credentials: "include",
+                redirect: "follow",
+                body: editBody.toString(),
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            });
+            if (editResp.status !== 200) {
+                errors.push(
+                    `ID ${rec.id}: edit page HTTP ${editResp.status}`
+                );
+                continue;
             }
+            const editHtml = await editResp.text();
+            // Look for a submit button whose value contains "Delete".
+            // Elks.org's form uses <input type="submit" name="X"
+            // value="Delete This Program"> or similar wording.
+            if (!cachedDelFieldName) {
+                const delBtn = editHtml.match(
+                    /<input[^>]*type=["']submit["'][^>]*name=["']([^"']+)["'][^>]*value=["']([^"']*[Dd]elete[^"']*)["']/i
+                ) || editHtml.match(
+                    /<input[^>]*name=["']([^"']+)["'][^>]*type=["']submit["'][^>]*value=["']([^"']*[Dd]elete[^"']*)["']/i
+                ) || editHtml.match(
+                    /<input[^>]*value=["']([^"']*[Dd]elete[^"']*)["'][^>]*name=["']([^"']+)["']/i
+                );
+                if (!delBtn) {
+                    errors.push(
+                        `ID ${rec.id}: no Delete button found on edit page ` +
+                        `— dumping first 2000 chars of edit HTML to console`
+                    );
+                    console.warn(
+                        `[Elks.org Purge] Edit page for ID=${rec.id} had ` +
+                        `no Delete button.  HTML head:\n` +
+                        editHtml.substring(0, 2000)
+                    );
+                    continue;
+                }
+                // Handle both regex orderings.
+                if (/[Dd]elete/.test(delBtn[1])) {
+                    cachedDelFieldValue = delBtn[1];
+                    cachedDelFieldName = delBtn[2];
+                } else {
+                    cachedDelFieldName = delBtn[1];
+                    cachedDelFieldValue = delBtn[2];
+                }
+                console.log(
+                    `[Elks.org Purge] Discovered delete field: ` +
+                    `name="${cachedDelFieldName}" ` +
+                    `value="${cachedDelFieldValue}"`,
+                );
+                await setProgress({
+                    phase: "deleting",
+                    message: `${msg} (delete field: ${cachedDelFieldName})`,
+                    current: i + 1,
+                    total,
+                });
+            }
+            // theUID token if elks.org includes one on the edit page.
+            const uidMatch = editHtml.match(
+                /name=["']theUID["']\s+value=["']([^"']*)["']/i
+            );
+
+            // Step 2: POST the actual delete.
+            const delBody = new URLSearchParams();
+            delBody.set("ID", rec.id);
+            delBody.set(cachedDelFieldName, cachedDelFieldValue);
+            if (uidMatch) delBody.set("theUID", uidMatch[1]);
+            const delResp = await fetch(formUrl, {
+                method: "POST",
+                credentials: "include",
+                redirect: "follow",
+                body: delBody.toString(),
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            });
+            if (delResp.status !== 200) {
+                errors.push(
+                    `ID ${rec.id}: delete POST HTTP ${delResp.status}`
+                );
+            } else {
+                serverAccepted++;
+                console.log(
+                    `[Elks.org Purge] ${i + 1}/${total}: ID=${rec.id} ` +
+                    `-> POST accepted (verification pending)`,
+                );
+            }
+            // Small delay to stay polite.
+            await new Promise((r) => setTimeout(r, 250));
+        } catch (e) {
+            errors.push(`ID ${rec.id}: ${e.message}`);
+            console.error(
+                `[Elks.org Purge] ID=${rec.id} threw:`, e,
+            );
         }
     }
 
-    return { scanned, kept, deleted, errors };
+    // Step 3: VERIFY by re-fetching the landing page and counting
+    // how many of our target IDs are still present.
+    await setProgress({
+        phase: "verifying",
+        message: `Verifying — re-fetching landing page…`,
+        current: total,
+        total,
+    });
+    console.log("[Elks.org Purge] Verifying by re-fetching landing…");
+
+    const verifyResp = await fetch(formUrl, {
+        method: "GET",
+        credentials: "include",
+        redirect: "follow",
+    });
+    if (verifyResp.status !== 200) {
+        await setProgress({
+            phase: "error",
+            message: "Verify HTTP " + verifyResp.status,
+        });
+        throw new Error("verify landing HTTP " + verifyResp.status);
+    }
+    const verifyHtml = await verifyResp.text();
+    let stillPresent = 0;
+    for (const rec of toDelete) {
+        const idPattern = new RegExp(
+            `name=["']ID["']\\s+value=["']${rec.id}["']`
+        );
+        if (idPattern.test(verifyHtml)) stillPresent++;
+    }
+    const verified = total - stillPresent;
+
+    if (stillPresent > 0 && verified === 0) {
+        errors.push(
+            `NOTHING was actually deleted despite ${serverAccepted} ` +
+            `HTTP 200 responses.  The delete field name ` +
+            `"${cachedDelFieldName}" may be wrong.  Check the console ` +
+            `for the edit-page HTML dump above.`
+        );
+    } else if (stillPresent > 0) {
+        errors.push(
+            `${stillPresent} duplicate(s) still present after purge — ` +
+            `may need to run purge again`
+        );
+    }
+
+    await setProgress({
+        phase: "done",
+        message:
+            `Done. Scanned ${scanned}, kept ${kept}, ` +
+            `verified deletions ${verified}/${total}`,
+        current: total,
+        total,
+        // Full result payload so the popup can render the summary
+        // inline (no alert() dialog required).  Survives popup close.
+        result: {
+            scanned,
+            kept,
+            attempted,
+            serverAccepted,
+            verified,
+            stillPresent,
+            errors,
+            delFieldName: cachedDelFieldName,
+            delFieldValue: cachedDelFieldValue,
+        },
+    });
+    console.log(
+        `[Elks.org Purge] Final: verified ${verified}/${total} deleted, ` +
+        `${stillPresent} still present, ${errors.length} errors`,
+    );
+
+    return {
+        scanned,
+        kept,
+        attempted,
+        serverAccepted,
+        deleted: verified,
+        stillPresent,
+        errors,
+    };
 }
 
 // ── main poll cycle ────────────────────────────────────────────────

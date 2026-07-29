@@ -34,7 +34,93 @@ async function renderPurgeProgress() {
     }
     box.style.display = "block";
 
-    // ── DONE: render final results inline ───────────────────────
+    // ── SYNC DONE: combined push+purge results ──────────────────
+    if (purgeStatus.phase === "sync_done" && purgeStatus.result) {
+        const r = purgeStatus.result;
+        const gap = (r.serverAccepted || 0) - (r.verified || 0);
+        let warn = "";
+        if (gap > 0) {
+            warn =
+                '<div style="margin-top:6px; padding:6px 8px; ' +
+                'background:#fff5f5; border:1px solid #f5c6cb; ' +
+                'border-radius:3px; color:#7a1e1e; font-size:11px;">' +
+                '⚠ Server accepted ' + gap + ' deletions that did ' +
+                'NOT actually remove records. See service-worker ' +
+                'console for the discovered delete-field name.' +
+                '</div>';
+        }
+        let errBlock = "";
+        const allErrors = [];
+        if (r.pushLastError && r.pushLastError.message) {
+            allErrors.push("push: " + r.pushLastError.message);
+        }
+        if (r.purgeErrors && r.purgeErrors.length) {
+            for (const e of r.purgeErrors) allErrors.push("purge: " + e);
+        }
+        if (allErrors.length) {
+            errBlock =
+                '<div style="margin-top:6px; font-size:11px; ' +
+                'color:#7a1e1e;">' +
+                '<strong>Errors (' + allErrors.length + '):</strong>' +
+                '<div style="max-height:80px; overflow-y:auto; ' +
+                'margin-top:2px; padding:4px; background:#fff5f5; ' +
+                'border:1px solid #f5c6cb; border-radius:3px; ' +
+                'font-family:monospace; font-size:10px; ' +
+                'white-space:pre-wrap;">' +
+                esc(allErrors.slice(0, 8).join("\n")) +
+                (allErrors.length > 8
+                    ? "\n… and " + (allErrors.length - 8) + " more"
+                    : "") +
+                '</div></div>';
+        }
+        box.innerHTML =
+            '<div style="display:flex; justify-content:space-between; ' +
+            'align-items:center;">' +
+                '<div style="font-weight:600; font-size:11px; ' +
+                'text-transform:uppercase; color:#0a5d0a;">' +
+                    'Sync complete' +
+                '</div>' +
+                '<button id="purge-dismiss" style="font-size:10px; ' +
+                'padding:2px 6px; background:#fff; border:1px solid ' +
+                '#ccc; border-radius:3px; cursor:pointer;">Dismiss' +
+                '</button>' +
+            '</div>' +
+            // Push phase
+            '<div style="margin-top:6px; font-weight:600; ' +
+            'font-size:11px; color:#6a2020;">Phase 1 — Push</div>' +
+            '<table style="width:100%; font-size:12px; ' +
+            'border-collapse:collapse;">' +
+                purgeRow("Attempted", r.pushAttempted) +
+                purgeRow("Pushed", r.pushed,
+                    r.pushed > 0 ? "#0a5d0a" : "#222") +
+                purgeRow("Failed", r.pushFailed,
+                    r.pushFailed > 0 ? "#7a1e1e" : "#0a5d0a") +
+            '</table>' +
+            // Purge phase
+            '<div style="margin-top:8px; font-weight:600; ' +
+            'font-size:11px; color:#6a2020;">Phase 2 — Purge</div>' +
+            '<table style="width:100%; font-size:12px; ' +
+            'border-collapse:collapse;">' +
+                purgeRow("Scanned rows", r.scanned) +
+                purgeRow("Unique kept", r.kept) +
+                purgeRow("Duplicates found", r.duplicatesFound) +
+                purgeRow("Verified deleted", r.verified,
+                    r.verified > 0 ? "#0a5d0a" : "#222") +
+                purgeRow("Still present", r.stillPresent,
+                    r.stillPresent > 0 ? "#7a1e1e" : "#0a5d0a") +
+            '</table>' +
+            warn + errBlock;
+        const dismiss = document.getElementById("purge-dismiss");
+        if (dismiss) {
+            dismiss.addEventListener("click", () => {
+                chrome.storage.local.set({purgeStatus: null},
+                    () => renderPurgeProgress());
+            });
+        }
+        return;
+    }
+
+    // ── DONE: render final purge-only results inline ────────────
     if (purgeStatus.phase === "done" && purgeStatus.result) {
         const r = purgeStatus.result;
         const gap = (r.serverAccepted ?? 0) - (r.verified ?? 0);
@@ -474,6 +560,43 @@ $("purge-duplicates").addEventListener("click", async () => {
         // Success path — background already wrote result to
         // purgeStatus.  Render it now for immediate feedback.
         renderPurgeProgress();
+    });
+});
+
+// Sync (Push + Purge) — one-click reconciliation.  No confirm dialog
+// (unlike Purge alone) since Sync is designed to be safe to run any
+// time: pushes only what's queued, deletes only same-fingerprint
+// duplicates.  Runs push→purge and renders combined results inline.
+$("sync-now").addEventListener("click", async () => {
+    const btn = $("sync-now");
+    btn.textContent = "Syncing…";
+    btn.disabled = true;
+    await new Promise((r) =>
+        chrome.storage.local.set({purgeStatus: {
+            phase: "sync_push",
+            message: "Starting sync…",
+            updated: Date.now(),
+        }}, () => r())
+    );
+    await renderPurgeProgress();
+    chrome.runtime.sendMessage({type: "sync_now"}, (resp) => {
+        btn.textContent = "Sync (Push + Purge)";
+        btn.disabled = false;
+        if (!resp) return;
+        if (!resp.ok) {
+            chrome.storage.local.set({purgeStatus: {
+                phase: "error",
+                message: "Sync failed: " + (resp.error || "unknown"),
+                updated: Date.now(),
+            }}, () => renderPurgeProgress());
+            return;
+        }
+        // Background already wrote combined result to purgeStatus
+        // with phase="sync_done"; render it now.
+        renderPurgeProgress();
+        // Also refresh the pending count in the header now that
+        // successful pushes have drained the queue.
+        refreshPendingCount();
     });
 });
 

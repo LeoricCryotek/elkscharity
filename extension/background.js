@@ -688,18 +688,27 @@ async function purgeDuplicates() {
 }
 
 // ── main poll cycle ────────────────────────────────────────────────
+// Returns a result object so callers (Sync button) can report totals
+// inline instead of pulling them from lastStatus.  Shape:
+//   {ok, phase, pushed, failed, attempted, skipped, message}
+// where phase describes why we returned early (disabled/not_configured/
+// no_elks_session/no_pending/completed).
 async function pollAndPush() {
     const {enabled, odooUrl, apiKey, dryRun} = await getSettings();
     if (!enabled) {
         await setStatus({state: "disabled"});
-        return;
+        return {ok: true, phase: "disabled", pushed: 0, failed: 0,
+                attempted: 0, skipped: 0,
+                message: "Push disabled — no-op."};
     }
     if (!odooUrl || !apiKey) {
         await setStatus({
             state: "not_configured",
             message: "Set Odoo URL + API Key in the popup.",
         });
-        return;
+        return {ok: false, phase: "not_configured", pushed: 0,
+                failed: 0, attempted: 0, skipped: 0,
+                message: "Odoo URL + API Key not configured."};
     }
 
     // DRY RUN skips the elks.org session check entirely — the whole
@@ -710,13 +719,15 @@ async function pollAndPush() {
         // the user why nothing is being pushed.
         const sess = await elksSessionAlive();
         if (!sess.ok) {
+            const emsg =
+                "Log in at elks.org to enable pushes (session " +
+                "check landed at " + sess.url + ").";
             await setStatus({
                 state: "no_elks_session",
-                message:
-                    "Log in at elks.org to enable pushes (session " +
-                    "check landed at " + sess.url + ").",
+                message: emsg,
             });
-            return;
+            return {ok: false, phase: "no_elks_session", pushed: 0,
+                    failed: 0, attempted: 0, skipped: 0, message: emsg};
         }
     }
 
@@ -725,30 +736,27 @@ async function pollAndPush() {
     try {
         pending = await odooGet("/elkscharity/ext/v1/pending");
     } catch (e) {
-        await setStatus({
-            state: "odoo_error",
-            message: "Couldn't reach Odoo: " + e.message,
-        });
-        return;
+        const emsg = "Couldn't reach Odoo: " + e.message;
+        await setStatus({state: "odoo_error", message: emsg});
+        return {ok: false, phase: "odoo_error", pushed: 0, failed: 0,
+                attempted: 0, skipped: 0, message: emsg};
     }
     if (pending.status === 401) {
-        await setStatus({
-            state: "bad_api_key",
-            message:
-                "Odoo rejected the API key.  Regenerate it in " +
-                "Preferences → Elks.org Credentials and paste the " +
-                "new value here.",
-        });
-        return;
+        const emsg =
+            "Odoo rejected the API key.  Regenerate it in " +
+            "Preferences → Elks.org Credentials and paste the " +
+            "new value here.";
+        await setStatus({state: "bad_api_key", message: emsg});
+        return {ok: false, phase: "bad_api_key", pushed: 0, failed: 0,
+                attempted: 0, skipped: 0, message: emsg};
     }
     if (pending.status !== 200 || !pending.json.ok) {
-        await setStatus({
-            state: "odoo_error",
-            message:
-                "Odoo returned HTTP " + pending.status + " — " +
-                (pending.json.error || "unexpected response"),
-        });
-        return;
+        const emsg =
+            "Odoo returned HTTP " + pending.status + " — " +
+            (pending.json.error || "unexpected response");
+        await setStatus({state: "odoo_error", message: emsg});
+        return {ok: false, phase: "odoo_error", pushed: 0, failed: 0,
+                attempted: 0, skipped: 0, message: emsg};
     }
 
     const items = pending.json.items || [];
@@ -759,7 +767,9 @@ async function pollAndPush() {
             message: "No pending pushes.  Waiting.",
             lastCount: 0,
         });
-        return;
+        return {ok: true, phase: "no_pending", pushed: 0, failed: 0,
+                attempted: 0, skipped: 0,
+                message: "No pending contributions."};
     }
     await setStatus({
         state: "pushing",
@@ -856,6 +866,155 @@ async function pollAndPush() {
             });
         } catch (_) {}
     }
+    return {
+        ok: failures === 0,
+        phase: "completed",
+        pushed: successes,
+        failed: failures,
+        attempted: items.length,
+        skipped: 0,
+        lastError,
+        message:
+            (dryRun ? "DRY RUN — " : "") +
+            successes + " pushed, " + failures + " failed " +
+            "(of " + items.length + ").",
+    };
+}
+
+// ── SYNC (push + purge in one shot) ─────────────────────────────────
+// One-click reconciliation between Odoo and elks.org.  Runs
+// pollAndPush() then purgeDuplicates() in sequence, both reporting
+// to chrome.storage.local.purgeStatus so the popup renders a single
+// live status stream + a combined results table at the end.
+//
+// Sync flow rationale:
+//   PUSH FIRST — so any missing records get added, THEN duplicates
+//   (whether from this push or a prior retry storm) get cleaned.
+//   Purge-first would leave a race window where a subsequent push
+//   creates duplicates that stick around until the next sync.
+async function syncNow(opts) {
+    const forcePush = !!(opts && opts.forcePush);
+
+    async function setSyncProgress(patch) {
+        return new Promise((r) =>
+            chrome.storage.local.set({purgeStatus: {
+                ...patch,
+                isSync: true,
+                updated: Date.now(),
+            }}, () => r())
+        );
+    }
+
+    console.log("[Elks.org Sync] Starting push+purge sync");
+    await setSyncProgress({
+        phase: "sync_push",
+        message: "Phase 1/2 — pushing pending contributions…",
+    });
+
+    // Force enable for the sync run if the user has push disabled.
+    // Restore afterwards so the alarm cycle keeps their preference.
+    let restoreEnabled = null;
+    if (forcePush) {
+        const s = await getSettings();
+        if (!s.enabled) {
+            restoreEnabled = false;
+            await setSettings({enabled: true});
+        }
+    }
+
+    let pushResult;
+    try {
+        pushResult = await pollAndPush();
+    } catch (e) {
+        pushResult = {
+            ok: false,
+            phase: "exception",
+            pushed: 0,
+            failed: 0,
+            attempted: 0,
+            message: "Push threw: " + e.message,
+        };
+        console.error("[Elks.org Sync] push phase threw:", e);
+    } finally {
+        if (restoreEnabled !== null) {
+            await setSettings({enabled: restoreEnabled});
+        }
+    }
+
+    console.log("[Elks.org Sync] Push phase result:", pushResult);
+    await setSyncProgress({
+        phase: "sync_between",
+        message:
+            "Phase 1 done (" + (pushResult.pushed || 0) +
+            " pushed, " + (pushResult.failed || 0) + " failed). " +
+            "Starting purge…",
+    });
+    // Brief pause so any just-created elks.org rows show up on the
+    // landing page before the purge scans it.
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // ── Phase 2: purge duplicates ─────────────────────────────
+    // If push failed on session/config, purge will also fail — but
+    // we still try so the user sees BOTH sets of errors, not just
+    // whichever fired first.
+    let purgeResult;
+    try {
+        purgeResult = await purgeDuplicates();
+    } catch (e) {
+        purgeResult = {
+            scanned: 0, kept: 0, attempted: 0, serverAccepted: 0,
+            deleted: 0, stillPresent: 0,
+            errors: ["purge threw: " + e.message],
+        };
+        console.error("[Elks.org Sync] purge phase threw:", e);
+    }
+    console.log("[Elks.org Sync] Purge phase result:", purgeResult);
+
+    // ── Combined result ──────────────────────────────────────
+    const combined = {
+        // Push side
+        pushPhase: pushResult.phase,
+        pushed: pushResult.pushed || 0,
+        pushFailed: pushResult.failed || 0,
+        pushAttempted: pushResult.attempted || 0,
+        pushMessage: pushResult.message || "",
+        pushLastError: pushResult.lastError || null,
+        // Purge side
+        scanned: purgeResult.scanned || 0,
+        kept: purgeResult.kept || 0,
+        duplicatesFound: purgeResult.attempted || 0,
+        serverAccepted: purgeResult.serverAccepted || 0,
+        verified: purgeResult.deleted || 0,
+        stillPresent: purgeResult.stillPresent || 0,
+        purgeErrors: purgeResult.errors || [],
+    };
+
+    await setSyncProgress({
+        phase: "sync_done",
+        message:
+            "Sync complete. " +
+            combined.pushed + " pushed, " +
+            combined.verified + " duplicates removed.",
+        current: 1, total: 1,
+        result: combined,
+    });
+    console.log("[Elks.org Sync] Done:", combined);
+
+    if (combined.pushed > 0 || combined.verified > 0) {
+        try {
+            chrome.notifications.create({
+                type: "basic",
+                iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
+                title: "Elks.org Sync",
+                message:
+                    combined.pushed + " pushed, " +
+                    combined.verified + " duplicates removed.",
+                priority: 0,
+            });
+        } catch (_) {}
+    }
+
+    return combined;
 }
 
 // ── alarm wiring ────────────────────────────────────────────────────
@@ -900,6 +1059,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     if (msg && msg.type === "purge_duplicates") {
         purgeDuplicates()
+            .then((r) => sendResponse({ok: true, result: r}))
+            .catch((e) => sendResponse({ok: false, error: e.message}));
+        return true;
+    }
+    if (msg && msg.type === "sync_now") {
+        // forcePush temporarily flips enabled=true if the user has
+        // push disabled so a manual sync always exercises push.
+        // Restored to the user's preference before sync returns.
+        syncNow({forcePush: true})
             .then((r) => sendResponse({ok: true, result: r}))
             .catch((e) => sendResponse({ok: false, error: e.message}));
         return true;

@@ -371,13 +371,24 @@ class HrAttendance(models.Model):
             buckets.setdefault(key, [])
             buckets[key].append(a.id)
 
+        # Cache the fallback "Categories Not Covered" category so any
+        # attendance whose task lacks a category still generates a
+        # pushable contribution.  Prior versions skipped these
+        # silently, which is why lots of Lodge Operations rows were
+        # missing from the push queue.
+        fallback_cat = self.env.ref(
+            "elkscharity.cat_9999", raise_if_not_found=False,
+        )
+
         for (task_id, event_date), _ids in buckets.items():
             task = self.env["project.task"].browse(task_id)
-            if not task.exists() or not task.x_charity_category_id:
-                # Can't build an elks.org payload without a GL
-                # category — skip silently.  These land on the
-                # "Missing Charity Category" menu for Secretary
-                # cleanup.
+            if not task.exists():
+                continue
+            if not task.x_charity_category_id and fallback_cat:
+                task.sudo().x_charity_category_id = fallback_cat.id
+            if not task.x_charity_category_id:
+                # Still nothing — no fallback category exists, would
+                # produce an unpushable contribution.  Skip.
                 continue
 
             # Aggregate ALL validated attendance for this (task, date)
@@ -478,6 +489,8 @@ class HrAttendance(models.Model):
             else:
                 # Fresh contribution — created straight to Confirmed
                 # so it enters the extension push queue immediately.
+                # Explicit x_elks_org_state so the row can't get stuck
+                # in a limbo state via ORM default weirdness.
                 Contrib.create({
                     "name": task.name,
                     "contribution_date": event_date,
@@ -496,6 +509,7 @@ class HrAttendance(models.Model):
                     "cash_value": att_cash,
                     "non_cash_value": att_non_cash,
                     "x_source": "attendance",
+                    "x_elks_org_state": "not_pushed",
                     "state": "confirmed",
                     "submitted_by": self.env.user.id,
                     "confirmed_by": self.env.user.id,

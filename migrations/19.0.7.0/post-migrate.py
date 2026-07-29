@@ -29,3 +29,8 @@ def migrate(cr, version):
     ])
     if historical:
         historical._ensure_attendance_contribution()
+
+    # Re-alphabetize the app launcher on every upgrade.  Mirrors the
+    # elkssecretary "Alphabetize App Menus" tool but automated.
+    from odoo.addons.elkscharity import alphabetize_app_menus
+    alphabetize_app_menus(env)

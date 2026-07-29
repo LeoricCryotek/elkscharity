@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Elks Charity — Volunteer Hours, Activities & Grand Lodge Report",
-    "version": "19.0.7.0",
+    "version": "19.0.7.1",
     "category": "Productivity",
     "summary": "Track volunteer hours and charitable activities per "
                "Grand Lodge categories (1001–9999). Uses Odoo Projects "
@@ -101,4 +101,7 @@ base, mail, project, hr_timesheet, calendar, elkscontacts, elksfrs
     },
     "installable": True,
     "application": True,
+    # Runs once on first install — see __init__.py.  The same call
+    # runs on upgrade via each version's post-migrate.py.
+    "post_init_hook": "_post_init_hook",
 }

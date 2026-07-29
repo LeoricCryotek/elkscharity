@@ -96,15 +96,28 @@ $("save").addEventListener("click", async () => {
         alert("Odoo URL must start with http:// or https://");
         return;
     }
-    chrome.storage.local.set(
-        {odooUrl, apiKey, enabled, dryRun},
-        () => {
-            $("save").textContent = "Saved ✓";
-            setTimeout(() => {
-                $("save").textContent = "Save Settings";
-            }, 1500);
-        },
+    // If the connection target changed (URL or API key), wipe the
+    // last-known status from the previous environment.  Otherwise the
+    // popup shows a stale "DRY RUN — N pushed" from the old server
+    // when the user moves the extension from a test Odoo to prod.
+    const prev = await loadSettings();
+    const targetChanged = (
+        prev.odooUrl !== odooUrl || prev.apiKey !== apiKey
     );
+    const patch = {odooUrl, apiKey, enabled, dryRun};
+    if (targetChanged) {
+        patch.lastStatus = null;
+    }
+    chrome.storage.local.set(patch, async () => {
+        $("save").textContent = "Saved ✓";
+        setTimeout(() => {
+            $("save").textContent = "Save Settings";
+        }, 1500);
+        if (targetChanged) {
+            await renderStatus();
+            await refreshPendingCount();
+        }
+    });
 });
 
 $("run-now").addEventListener("click", async () => {

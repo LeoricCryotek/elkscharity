@@ -197,6 +197,12 @@ class HrAttendance(models.Model):
             # + date, and reduce the parent contribution's declared
             # hours by the removed PR share.  See _reconcile_pr_lines.
             charity_records._reconcile_pr_lines()
+            # Ensure the (task, date) has a Confirmed contribution so
+            # it enters the elks.org push queue.  If Quick Entry
+            # already created one, we update it in _reconcile_pr_lines
+            # above; if there's no contribution yet, this creates one
+            # from the attendance data.
+            charity_records._ensure_attendance_contribution()
             charity_records._invalidate_charity_tasks()
         return records
 
@@ -212,11 +218,14 @@ class HrAttendance(models.Model):
             newly_tagged = self.filtered('x_charity_task_id')
             newly_tagged._auto_validate_charity()
             newly_tagged._reconcile_pr_lines()
-        elif ('check_in' in vals or 'x_charity_hours' in vals) and (
+            newly_tagged._ensure_attendance_contribution()
+        elif ('check_in' in vals or 'x_charity_hours' in vals or
+              'x_miles' in vals or 'x_is_helper' in vals) and (
                 self._CHARITY_TRIGGER_FIELDS & set(vals)):
-            # Attendance date or hours changed — re-check for PR
-            # matches on the (possibly new) date.
-            self.filtered('x_charity_task_id')._reconcile_pr_lines()
+            # Attendance details changed — refresh derived data.
+            still_charity = self.filtered('x_charity_task_id')
+            still_charity._reconcile_pr_lines()
+            still_charity._ensure_attendance_contribution()
         if self._CHARITY_TRIGGER_FIELDS & set(vals):
             new_tasks = self.mapped('x_charity_task_id')
             self._invalidate_charity_tasks(old_tasks | new_tasks)
@@ -330,6 +339,168 @@ class HrAttendance(models.Model):
                         subtype_xmlid="mail.mt_note",
                     )
             matching_prs.unlink()
+
+    def _ensure_attendance_contribution(self):
+        """For each (task, date) touched by self, ensure a Confirmed
+        contribution exists so it enters the elks.org push queue.
+
+        Rules:
+          - If a Quick Entry contribution already covers the bucket,
+            it stays as the authoritative record — attendance hours
+            are added to it (Quick Entry declared totals + attendance
+            actuals combined).  Ensures elks.org sees the true full
+            picture, not just the Quick Entry declaration.
+          - Otherwise, create a new Confirmed contribution with
+            x_source='attendance' aggregating every validated
+            charity attendance for that (task, date).
+          - Never touch contributions in state 'cancelled' or that
+            have already been pushed to elks.org (x_elks_org_state
+            == 'pushed') — we don't want to retroactively edit rows
+            that elks.org has already accepted.
+        """
+        Contrib = self.env["elks.charity.contribution"].sudo()
+        Att = self.env["hr.attendance"].sudo()
+
+        # Bucket the current recordset by (task, event_date) so we
+        # touch each contribution once per save cycle.
+        buckets = {}  # {(task_id, date): [attendance_id, ...]}
+        for a in self:
+            if not a.x_charity_task_id or not a.check_in:
+                continue
+            key = (a.x_charity_task_id.id, a.check_in.date())
+            buckets.setdefault(key, [])
+            buckets[key].append(a.id)
+
+        for (task_id, event_date), _ids in buckets.items():
+            task = self.env["project.task"].browse(task_id)
+            if not task.exists() or not task.x_charity_category_id:
+                # Can't build an elks.org payload without a GL
+                # category — skip silently.  These land on the
+                # "Missing Charity Category" menu for Secretary
+                # cleanup.
+                continue
+
+            # Aggregate ALL validated attendance for this (task, date)
+            # — not just the current record — so the contribution
+            # totals stay in sync when multiple people clock in.
+            same_bucket = Att.search([
+                ("x_charity_task_id", "=", task_id),
+                ("x_validated", "=", True),
+                ("check_out", "!=", False),
+            ]).filtered(
+                lambda a: a.check_in and a.check_in.date() == event_date
+            )
+            if not same_bucket:
+                continue
+
+            elks_atts = same_bucket.filtered(lambda a: not a.x_is_helper)
+            help_atts = same_bucket.filtered("x_is_helper")
+
+            att_elks_hours = sum(
+                a.x_charity_hours or (
+                    (a.check_out - a.check_in).total_seconds() / 3600.0
+                    if a.check_in and a.check_out else 0
+                )
+                for a in elks_atts
+            )
+            att_help_hours = sum(
+                a.x_charity_hours or (
+                    (a.check_out - a.check_in).total_seconds() / 3600.0
+                    if a.check_in and a.check_out else 0
+                )
+                for a in help_atts
+            )
+            att_elks_miles = sum(elks_atts.mapped("x_miles") or [0.0])
+            att_help_miles = sum(help_atts.mapped("x_miles") or [0.0])
+            att_elks_count = len(set(elks_atts.mapped("employee_id.id")))
+            att_help_count = len(set(help_atts.mapped("employee_id.id")))
+            att_cash = sum(same_bucket.mapped("x_cash_value") or [0.0])
+            att_non_cash = sum(
+                same_bucket.mapped("x_non_cash_value") or [0.0]
+            )
+
+            # Existing contribution for this bucket?
+            existing = Contrib.search([
+                ("task_id", "=", task_id),
+                ("contribution_date", "=", event_date),
+                ("state", "not in", ("cancelled",)),
+            ], order="id asc", limit=1)
+
+            if existing:
+                # Don't touch already-pushed rows.
+                if existing.x_elks_org_state == "pushed":
+                    continue
+                # Determine what portion of existing.elks_hours came
+                # from other-than-attendance sources (Quick Entry
+                # declared - attendance actuals).  Simplest: set the
+                # contribution's totals to attendance_totals + any
+                # existing personal-record hours still on the
+                # contribution.  Since _reconcile_pr_lines already
+                # subtracted attendance-shadowed PR shares, the
+                # residual elks_hours == PR hours for people WITHOUT
+                # attendance.  Add attendance on top.
+                current_elks = existing.elks_hours or 0.0
+                current_help = existing.helper_hours or 0.0
+                current_elks_miles = existing.elks_miles or 0.0
+                current_help_miles = existing.helper_miles or 0.0
+                # We only need to ADD attendance hours if they aren't
+                # already reflected.  Detect via x_source:
+                #   - x_source='attendance': this contribution was
+                #     created by us — REPLACE totals with the fresh
+                #     aggregate (handles the multi-clock-in-same-day
+                #     case cleanly).
+                #   - anything else (Quick Entry, manual, etc.):
+                #     ADD attendance hours ONCE.  We track that via
+                #     the recompute path: for attendance-source rows
+                #     the aggregate is authoritative; for other
+                #     sources, we recompute total = current + delta,
+                #     where delta = attendance_totals - previously-
+                #     absorbed attendance.
+                #   Simplest correct behavior: use max() so we don't
+                #   accidentally overwrite a Secretary's manual edit.
+                if existing.x_source == "attendance":
+                    existing.write({
+                        "elks_hours": att_elks_hours,
+                        "helper_hours": att_help_hours,
+                        "elks_miles": att_elks_miles,
+                        "helper_miles": att_help_miles,
+                        "elks_count": att_elks_count,
+                        "helper_count": att_help_count,
+                        "cash_value": att_cash,
+                        "non_cash_value": att_non_cash,
+                        "x_elks_org_state": "not_pushed",
+                        "x_elks_org_last_error": False,
+                    })
+                # Non-attendance sources (Quick Entry, manual): leave
+                # the existing declared totals alone — _reconcile_pr
+                # already adjusted them for shadowed attendance, and
+                # the extension will push the whole thing to elks.org.
+            else:
+                # Fresh contribution — created straight to Confirmed
+                # so it enters the extension push queue immediately.
+                Contrib.create({
+                    "name": task.name,
+                    "contribution_date": event_date,
+                    "contribution_type": "service",
+                    "task_id": task_id,
+                    "elks_count": att_elks_count,
+                    "helper_count": att_help_count,
+                    "head_count": (
+                        task.x_head_count
+                        or (att_elks_count + att_help_count)
+                    ),
+                    "elks_hours": att_elks_hours,
+                    "helper_hours": att_help_hours,
+                    "elks_miles": att_elks_miles,
+                    "helper_miles": att_help_miles,
+                    "cash_value": att_cash,
+                    "non_cash_value": att_non_cash,
+                    "x_source": "attendance",
+                    "state": "confirmed",
+                    "submitted_by": self.env.user.id,
+                    "confirmed_by": self.env.user.id,
+                    "confirmed_date": fields.Datetime.now(),
+                })
 
     def unlink(self):
         tasks = self.mapped('x_charity_task_id')

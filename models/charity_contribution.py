@@ -12,7 +12,7 @@ are supported.  A template record generates future draft entries
 that must be confirmed by the Secretary, who can adjust the numbers
 before confirming.
 """
-from datetime import timedelta
+from datetime import date, timedelta
 
 from dateutil.relativedelta import relativedelta
 
@@ -42,6 +42,7 @@ FREQUENCY_SELECTION = [
     ('biweekly', 'Every 2 Weeks'),
     ('monthly', 'Monthly'),
     ('quarterly', 'Quarterly'),
+    ('lodge_meetings', 'Lodge Meetings (2nd & 4th Tuesday)'),
 ]
 
 
@@ -440,8 +441,49 @@ class ElksCharityContribution(models.Model):
             return from_date + relativedelta(months=1)
         elif freq == 'quarterly':
             return from_date + relativedelta(months=3)
+        elif freq == 'lodge_meetings':
+            return self._next_lodge_meeting_date(from_date)
         # Default: one week
         return from_date + timedelta(weeks=1)
+
+    @staticmethod
+    def _nth_weekday_of_month(year, month, weekday, n):
+        """Return the date of the nth <weekday> of a given year/month.
+        weekday: Mon=0 … Sun=6.  n starts at 1.
+        Returns None if the month doesn't have an nth of that weekday
+        (e.g., 5th Tuesday when the month only has 4)."""
+        import calendar
+        first_day = date(year, month, 1)
+        # Offset from first_day to the first occurrence of `weekday`.
+        offset = (weekday - first_day.weekday()) % 7
+        first_occurrence = first_day + timedelta(days=offset)
+        target = first_occurrence + timedelta(weeks=n - 1)
+        if target.month != month:
+            return None
+        return target
+
+    def _next_lodge_meeting_date(self, from_date):
+        """Return the next 2nd or 4th Tuesday strictly after from_date.
+
+        Standard BPOE Lodge Meeting cadence.  If your lodge meets on a
+        different pattern, override this method in a per-lodge module
+        or add another Selection value (e.g. 'lodge_meetings_1_3' for
+        1st/3rd Tuesday)."""
+        TUESDAY = 1  # Monday=0
+        # Candidates for this month and next two months.
+        candidates = []
+        cursor = date(from_date.year, from_date.month, 1)
+        for _ in range(3):
+            for nth in (2, 4):
+                d = self._nth_weekday_of_month(
+                    cursor.year, cursor.month, TUESDAY, nth,
+                )
+                if d and d > from_date:
+                    candidates.append(d)
+            cursor = cursor + relativedelta(months=1)
+        return min(candidates) if candidates else (
+            from_date + timedelta(weeks=2)
+        )
 
     @api.model
     def _cron_generate_recurring(self):

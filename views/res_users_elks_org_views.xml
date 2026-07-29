@@ -17,59 +17,42 @@
                 <page string="Elks.org Credentials"
                       name="elks_org_credentials">
                     <group>
-                        <group string="Browser Extension (Recommended)">
+                        <group string="Chrome Extension API Key">
                             <field name="x_elks_org_api_key"
                                    password="True"
                                    readonly="1"/>
                             <field name="x_elks_org_api_key_created"
                                    readonly="1"
                                    invisible="not x_elks_org_api_key_created"/>
+                            <field name="x_elks_org_last_success"
+                                   readonly="1"
+                                   invisible="not x_elks_org_last_success"/>
                             <button name="action_regenerate_elks_org_api_key"
                                     type="object"
                                     string="Regenerate API Key"
                                     class="btn-primary"
                                     confirm="Any Elks.org Push Chrome extension using the old key will stop working until you paste in the new one.  Continue?"/>
                         </group>
-                        <group string="Server-Side Auto-Push (Legacy)">
-                            <field name="x_elks_org_enabled"/>
-                            <field name="x_elks_org_login"
-                                   placeholder="Your elks.org member number or email"/>
-                            <field name="x_elks_org_password"
-                                   password="True"
-                                   placeholder="Your elks.org password"/>
-                            <field name="x_elks_org_last_success"
-                                   readonly="1"
-                                   invisible="not x_elks_org_last_success"/>
-                        </group>
                     </group>
                     <p class="text-muted small">
-                        <strong>Recommended path — Chrome extension:</strong>
-                        install the Elks.org Push extension in your browser
-                        (see <em>Elks Charity → Configuration → Elks.org
-                        Push Setup</em> for install instructions), paste
-                        the API key above into the extension's popup, and
-                        keep an elks.org tab open + logged in.  The
-                        extension polls Odoo for pending submissions and
-                        pushes them silently using your real browser
-                        session.  Bypasses elks.org's server-side bot
-                        detection because it IS a real browser doing real
-                        submissions.
+                        <strong>How it works:</strong> install the
+                        Elks.org Push extension in your browser (see
+                        <em>Elks Charity → Configuration → Elks.org Push
+                        Setup</em>), paste the API key above into the
+                        extension popup, and keep an elks.org tab open
+                        + logged in.  The extension polls Odoo for
+                        confirmed contributions and pushes them silently
+                        using your real browser session — no
+                        credentials are stored anywhere on the Odoo
+                        server.
                     </p>
                     <p class="text-muted small">
-                        <strong>Legacy path — server-side auto-push:</strong>
-                        the credentials below drive a Playwright/Chromium
-                        login on the Odoo server.  Currently blocked by
-                        elks.org's bot detection (as of July 2026).  Kept
-                        as a fallback in case elks.org drops the check.
-                        If left unused, "Mark Submitted Manually" on each
-                        contribution is always available.
-                    </p>
-                    <p class="text-muted small">
-                        <strong>Security note:</strong> the API key gives
-                        the extension full push privileges as your user.
-                        Treat it like a password.  Regenerate it if your
-                        computer is compromised or you install the
-                        extension somewhere you don't fully control.
+                        <strong>Security note:</strong> the API key
+                        gives the extension full push privileges as
+                        your user.  Treat it like a password.
+                        Regenerate it if your computer is compromised
+                        or you install the extension somewhere you
+                        don't fully control.
                     </p>
                 </page>
             </xpath>
@@ -90,24 +73,18 @@
                 <page string="Elks.org Credentials"
                       name="elks_org_credentials">
                     <group>
-                        <group string="Browser Extension">
+                        <group string="Chrome Extension API Key">
                             <field name="x_elks_org_api_key"
                                    password="True"
                                    readonly="1"/>
                             <field name="x_elks_org_api_key_created"
                                    readonly="1"/>
+                            <field name="x_elks_org_last_success"
+                                   readonly="1"/>
                             <button name="action_regenerate_elks_org_api_key"
                                     type="object"
                                     string="Regenerate API Key"
                                     class="btn-primary"/>
-                        </group>
-                        <group string="Server-Side Auto-Push (Legacy)">
-                            <field name="x_elks_org_enabled"/>
-                            <field name="x_elks_org_login"/>
-                            <field name="x_elks_org_password"
-                                   password="True"/>
-                            <field name="x_elks_org_last_success"
-                                   readonly="1"/>
                         </group>
                     </group>
                 </page>

@@ -46,14 +46,46 @@
                         </group>
                     </group>
 
+                    <group string="Entry Mode">
+                        <group colspan="2">
+                            <field name="hours_per_person"/>
+                            <p colspan="2" class="text-muted small mb-0"
+                               invisible="not hours_per_person">
+                                <strong>Per-person mode ON.</strong>
+                                Enter Hours and Miles per person; the
+                                wizard multiplies by # Elks / # Helpers
+                                and stores the total.  Preview to the
+                                right of each field shows the resulting
+                                total that gets saved.
+                            </p>
+                            <p colspan="2" class="text-muted small mb-0"
+                               invisible="hours_per_person">
+                                <strong>Total mode.</strong>  Enter
+                                pre-summed totals (e.g. 6 Elks × 6 hrs =
+                                <em>36</em>).  Matches the BPOE paper
+                                form's Column E / G convention.
+                            </p>
+                        </group>
+                    </group>
+
                     <group string="Columns E – F · Volunteer Hours">
                         <group>
                             <field name="elks_hours"
-                                   string="(E) Total Elk Hours"
+                                   string="(E) Elk Hours"
                                    widget="float_time"/>
+                            <field name="effective_elks_hours"
+                                   string="→ Total Elk Hours (saved)"
+                                   widget="float_time"
+                                   readonly="1"
+                                   invisible="not hours_per_person"/>
                             <field name="helper_hours"
-                                   string="(F) Total Helper Hours"
+                                   string="(F) Helper Hours"
                                    widget="float_time"/>
+                            <field name="effective_helper_hours"
+                                   string="→ Total Helper Hours (saved)"
+                                   widget="float_time"
+                                   readonly="1"
+                                   invisible="not hours_per_person"/>
                         </group>
                     </group>
 
@@ -61,8 +93,16 @@
                         <group>
                             <field name="elks_miles"
                                    string="(G) Elk Miles"/>
+                            <field name="effective_elks_miles"
+                                   string="→ Total Elk Miles (saved)"
+                                   readonly="1"
+                                   invisible="not hours_per_person"/>
                             <field name="helper_miles"
                                    string="(H) Helper Miles"/>
+                            <field name="effective_helper_miles"
+                                   string="→ Total Helper Miles (saved)"
+                                   readonly="1"
+                                   invisible="not hours_per_person"/>
                         </group>
                     </group>
 
@@ -107,6 +147,10 @@
                                readonly="1"
                                string="Each Helper receives"
                                invisible="not helper_member_ids"/>
+                        <field name="attendance_override_summary"
+                               nolabel="1" colspan="2"
+                               readonly="1"
+                               invisible="not hours_per_person or (not elks_member_ids and not helper_member_ids) or not task_id or not event_date"/>
                     </group>
                 </sheet>
 

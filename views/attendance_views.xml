@@ -139,6 +139,41 @@
         ]</field>
     </record>
 
+    <!-- Action: Attendance flagged as charity/helper but missing a
+         charity task (GL category).  Secretary must resolve these
+         before contributions can be generated / pushed to elks.org,
+         since the elks.org form requires a Program ID (GL category
+         1001–9999).
+
+         Domain: no x_charity_task_id AND at least one hint that the
+         user thought this was charity work (helper flag OR non-zero
+         charity hours).  Use the existing bulk-assign wizard from
+         Actions > "Assign to Charity Activity" to fix in batch. -->
+    <record id="action_charity_attendance_missing_category"
+            model="ir.actions.act_window">
+        <field name="name">Missing Charity Category</field>
+        <field name="res_model">hr.attendance</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('x_charity_task_id', '=', False),
+            '|',
+            ('x_is_helper', '=', True),
+            ('x_charity_hours', '>', 0),
+        ]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Nothing needs categorizing
+            </p>
+            <p>
+                Attendance rows flagged as charity or helper time but
+                without a Grand Lodge activity land here so a Secretary
+                can pick the right GL category.  Select one or more
+                rows, then <em>Actions → Assign to Charity Activity</em>
+                to bulk-set the task.
+            </p>
+        </field>
+    </record>
+
     <!-- Bulk: reset charity hours to raw clock-in→clock-out duration
          (for historical records that got the old worked_hours default
          and are now undercounted because Odoo subtracted lunch breaks). -->

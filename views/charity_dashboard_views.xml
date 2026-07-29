@@ -22,7 +22,7 @@
                 <separator/>
                 <filter name="filter_current_lodge_year"
                         string="Current Lodge Year"
-                        domain="[('lodge_year', '=', context.get('current_lodge_year'))]"/>
+                        domain="[('is_current_lodge_year', '=', True)]"/>
                 <separator/>
                 <separator/>
                 <filter name="filter_growing" string="Up vs. Prior Year"
@@ -96,124 +96,124 @@
                                 </div>
                             </div>
 
-                            <div class="container o_kanban_card_content o_elkscharity_metrics">
-                                <!-- HOURS -->
-                                <div class="row mt-2">
-                                    <div class="col-7">
-                                        <div class="o_metric_label">Total Hours</div>
+                            <div class="o_kanban_card_content o_elkscharity_metrics">
+                                <!-- HOURS — stacked vertically, no side-by-side
+                                     right column.  Everything fits on
+                                     ONE line of card width. -->
+                                <div class="o_metric_block">
+                                    <div class="o_metric_label">Total Hours</div>
+                                    <div class="o_metric_row">
                                         <div class="o_metric_value">
                                             <field name="total_hours" widget="float_time"/>
                                         </div>
-                                        <div class="text-muted small">
-                                            Elks <field name="elks_hours" widget="float_time"/>
-                                            · Helpers <field name="helper_hours" widget="float_time"/>
-                                        </div>
-                                    </div>
-                                    <div class="col-5 text-end">
-                                        <div class="o_metric_label">vs. <t t-esc="record.prior_lodge_year.value or '—'"/></div>
                                         <div t-attf-class="o_metric_delta o_trend_#{record.trend_total_hours.raw_value}">
                                             <t t-if="record.trend_total_hours.raw_value === 'up'">
-                                                <i class="fa fa-arrow-up" title="Up vs. prior year" role="img" aria-label="Up vs. prior year"/>
+                                                <i class="fa fa-arrow-up" role="img" aria-label="Up"/>
                                             </t>
                                             <t t-if="record.trend_total_hours.raw_value === 'down'">
-                                                <i class="fa fa-arrow-down" title="Down vs. prior year" role="img" aria-label="Down vs. prior year"/>
+                                                <i class="fa fa-arrow-down" role="img" aria-label="Down"/>
                                             </t>
                                             <t t-if="record.trend_total_hours.raw_value === 'flat'">
-                                                <i class="fa fa-minus" title="No change vs. prior year" role="img" aria-label="No change vs. prior year"/>
+                                                <i class="fa fa-minus" role="img" aria-label="Flat"/>
                                             </t>
                                             <field name="delta_total_hours" widget="float_time"/>
                                         </div>
-                                        <div class="text-muted small">
-                                            Prior <field name="prior_total_hours" widget="float_time"/>
-                                        </div>
+                                    </div>
+                                    <div class="text-muted small">
+                                        Elks <field name="elks_hours" widget="float_time"/>
+                                        · Helpers <field name="helper_hours" widget="float_time"/>
+                                        · Prior <field name="prior_total_hours" widget="float_time"/>
+                                        (<t t-esc="record.prior_lodge_year.value or '—'"/>)
                                     </div>
                                 </div>
 
                                 <!-- PARTICIPANTS -->
-                                <div class="row mt-3">
-                                    <div class="col-6">
-                                        <div class="o_metric_label">Unique Elks</div>
-                                        <div class="o_metric_value">
-                                            <field name="elks_unique"/>
-                                            <span class="text-muted small ms-1">
-                                                (prior <t t-esc="record.prior_elks_unique.value"/>)
-                                            </span>
+                                <div class="o_metric_block mt-3">
+                                    <div class="o_metric_row">
+                                        <div class="o_metric_half">
+                                            <div class="o_metric_label">Unique Elks</div>
+                                            <div class="o_metric_value">
+                                                <field name="elks_unique"/>
+                                                <span class="text-muted small ms-1">
+                                                    (prior <t t-esc="record.prior_elks_unique.value"/>)
+                                                </span>
+                                            </div>
+                                            <div class="text-muted small">
+                                                HC <field name="elks_headcount"/>
+                                            </div>
                                         </div>
-                                        <div class="text-muted small">
-                                            Head count <field name="elks_headcount"/>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="o_metric_label">Unique Helpers</div>
-                                        <div class="o_metric_value">
-                                            <field name="helper_unique"/>
-                                            <span class="text-muted small ms-1">
-                                                (prior <t t-esc="record.prior_helper_unique.value"/>)
-                                            </span>
-                                        </div>
-                                        <div class="text-muted small">
-                                            Head count <field name="helper_headcount"/>
+                                        <div class="o_metric_half">
+                                            <div class="o_metric_label">Unique Helpers</div>
+                                            <div class="o_metric_value">
+                                                <field name="helper_unique"/>
+                                                <span class="text-muted small ms-1">
+                                                    (prior <t t-esc="record.prior_helper_unique.value"/>)
+                                                </span>
+                                            </div>
+                                            <div class="text-muted small">
+                                                HC <field name="helper_headcount"/>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- DOLLARS -->
-                                <div class="row mt-3">
-                                    <div class="col-7">
-                                        <div class="o_metric_label">$ Raised</div>
+                                <!-- DOLLARS — same stacked treatment -->
+                                <div class="o_metric_block mt-3">
+                                    <div class="o_metric_label">$ Raised</div>
+                                    <div class="o_metric_row">
                                         <div class="o_metric_value">
                                             <field name="cash_raised" widget="monetary"
                                                    options="{'currency_field': 'currency_id'}"/>
                                         </div>
-                                        <div class="text-muted small">
-                                            Non-$ <field name="non_cash_raised" widget="monetary"
-                                                          options="{'currency_field': 'currency_id'}"/>
-                                        </div>
-                                    </div>
-                                    <div class="col-5 text-end">
-                                        <div class="o_metric_label">vs. prior</div>
                                         <div t-attf-class="o_metric_delta o_trend_#{record.trend_cash_raised.raw_value}">
                                             <t t-if="record.trend_cash_raised.raw_value === 'up'">
-                                                <i class="fa fa-arrow-up" title="$ raised up vs. prior year" role="img" aria-label="$ raised up vs. prior year"/>
+                                                <i class="fa fa-arrow-up" role="img" aria-label="Up"/>
                                             </t>
                                             <t t-if="record.trend_cash_raised.raw_value === 'down'">
-                                                <i class="fa fa-arrow-down" title="$ raised down vs. prior year" role="img" aria-label="$ raised down vs. prior year"/>
+                                                <i class="fa fa-arrow-down" role="img" aria-label="Down"/>
                                             </t>
                                             <t t-if="record.trend_cash_raised.raw_value === 'flat'">
-                                                <i class="fa fa-minus" title="$ raised flat vs. prior year" role="img" aria-label="$ raised flat vs. prior year"/>
+                                                <i class="fa fa-minus" role="img" aria-label="Flat"/>
                                             </t>
                                             <field name="delta_cash_raised" widget="monetary"
                                                    options="{'currency_field': 'currency_id'}"/>
                                         </div>
                                     </div>
+                                    <div class="text-muted small">
+                                        Non-$ <field name="non_cash_raised" widget="monetary"
+                                                      options="{'currency_field': 'currency_id'}"/>
+                                    </div>
                                 </div>
 
-                                <!-- DRILL-DOWN -->
-                                <div class="row mt-3">
-                                    <div class="col-12">
-                                        <div class="o_elkscharity_footer">
-                                            <span class="badge text-bg-light">
-                                                <field name="activity_count"/>
-                                                <span class="ms-1">activities</span>
-                                            </span>
-                                            <button type="object"
-                                                    name="action_open_category_activities"
-                                                    class="btn btn-sm btn-primary float-end">
-                                                Open Activities
-                                            </button>
-                                            <button type="object"
-                                                    name="action_open_category_hours"
-                                                    class="btn btn-sm btn-secondary float-end me-2">
-                                                Hours
-                                            </button>
-                                            <button type="object"
-                                                    name="action_quick_entry"
-                                                    class="btn btn-sm btn-success float-end me-2"
-                                                    title="Submit a BPOE Data Collection Survey entry for this category">
-                                                <i class="fa fa-plus me-1" title="Add" role="img" aria-label="Add"/>
-                                                Quick Entry
-                                            </button>
-                                        </div>
+                                <!-- DRILL-DOWN — icon-first buttons keep
+                                     the footer readable at 420px card width. -->
+                                <div class="mt-3">
+                                    <div class="o_elkscharity_footer">
+                                        <span class="badge text-bg-light">
+                                            <field name="activity_count"/>
+                                            <span class="ms-1">acts</span>
+                                        </span>
+                                        <button type="object"
+                                                name="action_quick_entry"
+                                                class="btn btn-sm btn-success"
+                                                title="Quick Entry — BPOE data collection form">
+                                            <i class="fa fa-plus" role="img" aria-label="Quick Entry"/>
+                                            Add
+                                        </button>
+                                        <button type="object"
+                                                name="action_open_category_hours"
+                                                class="btn btn-sm btn-secondary"
+                                                title="Open Charity Hours for this category">
+                                            <i class="fa fa-clock-o" role="img" aria-label="Hours"/>
+                                            Hours
+                                        </button>
+                                        <button type="object"
+                                                name="action_open_category_activities"
+                                                class="btn btn-sm btn-primary"
+                                                title="Open Charity Activities for this category">
+                                            <i class="fa fa-list" role="img" aria-label="Activities"/>
+                                            Activities
+                                        </button>
                                     </div>
                                 </div>
                             </div>

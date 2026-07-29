@@ -56,6 +56,38 @@ class ElksCharityDashboard(models.Model):
     )
     lodge_year = fields.Char("Lodge Year", readonly=True, index=True)
 
+    # Non-stored computed boolean that lets the search view filter for
+    # "the lodge year that contains today's date" WITHOUT needing the
+    # search context to carry a current_lodge_year value.
+    # Regression 2026-07-28: after removing the ir.actions.server
+    # wrapper (which used to inject current_lodge_year via context),
+    # the old context-based filter matched nothing, so the dashboard
+    # rendered empty even with data present.  This field + its search
+    # method make the filter self-sufficient.
+    is_current_lodge_year = fields.Boolean(
+        "Is Current Lodge Year",
+        compute="_compute_is_current_lodge_year",
+        search="_search_is_current_lodge_year",
+        store=False,
+    )
+
+    def _compute_is_current_lodge_year(self):
+        curr = _current_lodge_year()
+        for rec in self:
+            rec.is_current_lodge_year = (rec.lodge_year == curr)
+
+    @api.model
+    def _search_is_current_lodge_year(self, operator, value):
+        """Translate is_current_lodge_year search into a lodge_year query."""
+        curr = _current_lodge_year()
+        want_current = (
+            (operator in ("=", "==") and value)
+            or (operator in ("!=", "<>") and not value)
+        )
+        if want_current:
+            return [("lodge_year", "=", curr)]
+        return [("lodge_year", "!=", curr)]
+
     # ── current-period roll-ups (from the SQL view) ─────────────
     elks_hours = fields.Float("Elks Hours", readonly=True)
     helper_hours = fields.Float("Helper Hours", readonly=True)
@@ -599,6 +631,107 @@ class ElksCharityDashboard(models.Model):
                     FROM deduped_lines
                     GROUP BY category_id, lodge_year
                 ),
+                -- Personal-record timesheet lines (Quick Entry
+                -- attributions).  Hours/miles/cash STAY OUT of
+                -- deduped_lines to avoid double-counting the
+                -- contribution — but the tagged employees still
+                -- count as unique people who worked the event.
+                -- 19.0.6.7: collect them separately for the
+                -- unique-people-per-category rollup.
+                personal_record_people AS (
+                    SELECT DISTINCT
+                        pt.x_charity_category_id   AS category_id,
+                        pp.x_lodge_year            AS lodge_year,
+                        aal.employee_id            AS employee_id,
+                        COALESCE(aal.x_is_helper, FALSE)  AS is_helper
+                    FROM account_analytic_line aal
+                    JOIN project_task pt
+                          ON pt.id = aal.task_id
+                    JOIN project_project pp
+                          ON pp.id = aal.project_id
+                    WHERE COALESCE(aal.x_personal_record, FALSE) = TRUE
+                      AND pp.x_is_charity_parent = TRUE
+                      AND pt.x_charity_category_id IS NOT NULL
+                ),
+                -- 19.0.6.8: personal-record hours that get SHADOWED
+                -- by matching attendance for the same task+date.
+                -- These hours are already ALSO baked into the
+                -- contribution's summed elks_hours (Quick Entry put
+                -- them there).  When we add the attendance row on
+                -- top, Danny's 1:30 PR share + Danny's 2:30
+                -- attendance = double-count.  Subtract shadow hours
+                -- from the contribution total in the outer SELECT
+                -- to keep the math honest.
+                shadowed_pr_hours AS (
+                    SELECT
+                        pt.x_charity_category_id  AS category_id,
+                        pp.x_lodge_year           AS lodge_year,
+                        SUM(CASE WHEN NOT COALESCE(aal.x_is_helper, FALSE)
+                                 THEN aal.unit_amount ELSE 0 END)
+                            AS shadow_elks_hours,
+                        SUM(CASE WHEN COALESCE(aal.x_is_helper, FALSE)
+                                 THEN aal.unit_amount ELSE 0 END)
+                            AS shadow_helper_hours,
+                        SUM(CASE WHEN NOT COALESCE(aal.x_is_helper, FALSE)
+                                 THEN COALESCE(aal.x_miles, 0) ELSE 0 END)
+                            AS shadow_elks_miles,
+                        SUM(CASE WHEN COALESCE(aal.x_is_helper, FALSE)
+                                 THEN COALESCE(aal.x_miles, 0) ELSE 0 END)
+                            AS shadow_helper_miles
+                    FROM account_analytic_line aal
+                    JOIN project_task pt
+                          ON pt.id = aal.task_id
+                    JOIN project_project pp
+                          ON pp.id = aal.project_id
+                    WHERE COALESCE(aal.x_personal_record, FALSE) = TRUE
+                      AND pp.x_is_charity_parent = TRUE
+                      AND pt.x_charity_category_id IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1 FROM hr_attendance ha
+                          WHERE ha.x_charity_task_id = aal.task_id
+                            AND ha.employee_id = aal.employee_id
+                            AND ha.check_in::date = aal.date
+                            AND ha.x_validated = TRUE
+                      )
+                    GROUP BY pt.x_charity_category_id, pp.x_lodge_year
+                ),
+                pr_aggs AS (
+                    SELECT
+                        category_id,
+                        lodge_year,
+                        COUNT(DISTINCT CASE WHEN NOT is_helper
+                                            THEN employee_id END)
+                            AS pr_elks_unique,
+                        COUNT(DISTINCT CASE WHEN is_helper
+                                            THEN employee_id END)
+                            AS pr_helper_unique
+                    FROM personal_record_people
+                    GROUP BY category_id, lodge_year
+                ),
+                -- Merged unique-people count: attendance + validated
+                -- timesheets + personal-record attributions.  UNION
+                -- deduplicates naturally at the SQL layer.
+                all_tagged_people AS (
+                    SELECT DISTINCT category_id, lodge_year,
+                                    employee_id, is_helper
+                      FROM deduped_lines
+                    UNION
+                    SELECT category_id, lodge_year, employee_id, is_helper
+                      FROM personal_record_people
+                ),
+                combined_uniques AS (
+                    SELECT
+                        category_id,
+                        lodge_year,
+                        COUNT(DISTINCT CASE WHEN NOT is_helper
+                                            THEN employee_id END)
+                            AS combined_elks_unique,
+                        COUNT(DISTINCT CASE WHEN is_helper
+                                            THEN employee_id END)
+                            AS combined_helper_unique
+                    FROM all_tagged_people
+                    GROUP BY category_id, lodge_year
+                ),
                 contrib_aggs AS (
                     SELECT
                         pt.x_charity_category_id  AS category_id,
@@ -643,29 +776,59 @@ class ElksCharityDashboard(models.Model):
                     base.category_name,
                     base.gl_section,
                     base.lodge_year,
+                    -- 19.0.6.8: subtract personal-record hours that
+                    -- got shadowed by matching attendance, so the
+                    -- portion of the contribution's declared total
+                    -- attributed to Danny (who now has attendance)
+                    -- doesn't double-count with the attendance row.
                     COALESCE(la.elks_hours, 0)
-                      + COALESCE(ca.contrib_elks_hours, 0)
+                      + GREATEST(0,
+                          COALESCE(ca.contrib_elks_hours, 0)
+                            - COALESCE(sh.shadow_elks_hours, 0))
                                                      AS elks_hours,
                     COALESCE(la.helper_hours, 0)
-                      + COALESCE(ca.contrib_helper_hours, 0)
+                      + GREATEST(0,
+                          COALESCE(ca.contrib_helper_hours, 0)
+                            - COALESCE(sh.shadow_helper_hours, 0))
                                                      AS helper_hours,
                     COALESCE(la.elks_hours, 0)
                       + COALESCE(la.helper_hours, 0)
-                      + COALESCE(ca.contrib_elks_hours, 0)
-                      + COALESCE(ca.contrib_helper_hours, 0)
+                      + GREATEST(0,
+                          COALESCE(ca.contrib_elks_hours, 0)
+                            - COALESCE(sh.shadow_elks_hours, 0))
+                      + GREATEST(0,
+                          COALESCE(ca.contrib_helper_hours, 0)
+                            - COALESCE(sh.shadow_helper_hours, 0))
                                                      AS total_hours,
-                    COALESCE(la.elks_unique, 0)      AS elks_unique,
-                    COALESCE(la.helper_unique, 0)    AS helper_unique,
-                    COALESCE(la.elks_headcount, 0)
-                      + COALESCE(ca.contrib_elks, 0) AS elks_headcount,
-                    COALESCE(la.helper_headcount, 0)
-                      + COALESCE(ca.contrib_helpers, 0)
-                                                     AS helper_headcount,
+                    -- Unique count now includes personal-record
+                    -- attributions (Quick Entry "Attribute Hours To"
+                    -- picks) alongside validated attendance +
+                    -- timesheets.  19.0.6.7 fix — those attributed
+                    -- people should show as named individuals even
+                    -- though their hours are excluded from GL totals.
+                    COALESCE(cu.combined_elks_unique, 0)   AS elks_unique,
+                    COALESCE(cu.combined_helper_unique, 0) AS helper_unique,
+                    -- Headcount rule: GREATEST of what the
+                    -- contribution DECLARED (bulk elks_count) vs the
+                    -- unique people we can name from ANY tagged
+                    -- source.  Never sum.
+                    GREATEST(
+                        COALESCE(cu.combined_elks_unique, 0),
+                        COALESCE(ca.contrib_elks, 0)
+                    )                                AS elks_headcount,
+                    GREATEST(
+                        COALESCE(cu.combined_helper_unique, 0),
+                        COALESCE(ca.contrib_helpers, 0)
+                    )                                AS helper_headcount,
                     COALESCE(la.elks_miles, 0)
-                      + COALESCE(ca.contrib_elks_miles, 0)
+                      + GREATEST(0,
+                          COALESCE(ca.contrib_elks_miles, 0)
+                            - COALESCE(sh.shadow_elks_miles, 0))
                                                      AS elks_miles,
                     COALESCE(la.helper_miles, 0)
-                      + COALESCE(ca.contrib_helper_miles, 0)
+                      + GREATEST(0,
+                          COALESCE(ca.contrib_helper_miles, 0)
+                            - COALESCE(sh.shadow_helper_miles, 0))
                                                      AS helper_miles,
                     COALESCE(la.line_cash, 0)
                       + COALESCE(ca.contrib_cash, 0) AS cash_raised,
@@ -682,6 +845,10 @@ class ElksCharityDashboard(models.Model):
                                           AND ca.lodge_year = base.lodge_year
                 LEFT JOIN activity_aggs aa ON aa.category_id = base.category_id
                                            AND aa.lodge_year = base.lodge_year
+                LEFT JOIN combined_uniques cu ON cu.category_id = base.category_id
+                                              AND cu.lodge_year = base.lodge_year
+                LEFT JOIN shadowed_pr_hours sh ON sh.category_id = base.category_id
+                                               AND sh.lodge_year = base.lodge_year
             )
         """.format(table=self._table)
         self.env.cr.execute(query)

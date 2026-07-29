@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- =====================================================================
+     === HUMAN ===
+     "Volunteer Hours Leaderboard" — public website snippet. Drop it on any
+     website page to show the Elks who logged the most charity hours this
+     month and this lodge year, with the top volunteer featured large and
+     places 2–10 listed below, plus a note on our duty to serve.
+     === AI AGENT ===
+     Same pattern as the Charity Impact snippet: a minimal mount <div> +
+     frontend JS (charity_leaderboard_snippet.js) that fetches
+     /elks-charity/website/leaderboard.json and renders client-side, so the
+     website builder's thumbnail/preview pass can never hang. Data comes from
+     the shared elks.charity.leaderboard model.
+     ===================================================================== -->
+<odoo>
+
+    <template id="snippet_elks_leaderboard" name="Volunteer Hours Leaderboard">
+        <section class="s_elks_leaderboard pt32 pb32"
+                 data-snippet="s_elks_leaderboard"
+                 data-name="Volunteer Hours Leaderboard">
+            <div class="container">
+                <div class="elks-leaderboard-mount"
+                     data-limit="10">
+                    <p class="text-center text-muted">
+                        Loading the volunteer leaderboard…
+                    </p>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <!-- Register in the website builder palette (Elks group, created by the
+         Charity Impact snippet / elks_calendar_publisher). -->
+    <template id="snippet_elks_leaderboard_register"
+              inherit_id="website.snippets"
+              name="Volunteer Hours Leaderboard Snippets">
+        <xpath expr="//snippets[@id='snippet_structure']" position="inside">
+            <t t-snippet="elkscharity.snippet_elks_leaderboard"
+               t-thumbnail="/elkscharity/static/description/icon.png"
+               group="elks">
+                <keywords>leaderboard volunteer hours elks members ranking top service</keywords>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

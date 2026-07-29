@@ -72,6 +72,13 @@
               sequence="30"
               groups="group_elkscharity_secretary"/>
 
+    <menuitem id="menu_elkscharity_contributions_pending_push"
+              name="Pending Elks.org Push"
+              parent="menu_elkscharity_contributions"
+              action="action_charity_contributions_pending_push"
+              sequence="25"
+              groups="group_elkscharity_secretary"/>
+
     <!-- ── Hours ───────────────────────────────────────────── -->
     <menuitem id="menu_elkscharity_hours"
               name="Hours"
@@ -84,11 +91,34 @@
               action="action_charity_hours_unified"
               sequence="10"/>
 
+    <!-- "Hours Awaiting Validation" retired in 19.0.6.5 — charity
+         attendance auto-validates on save now, so this list would
+         always be empty.  Menu record kept as a comment for a few
+         releases in case the workflow needs to come back. -->
+    <!--
     <menuitem id="menu_elkscharity_hours_validate"
               name="Hours Awaiting Validation"
               parent="menu_elkscharity_hours"
               action="action_charity_hours_pending"
               sequence="20"
+              groups="group_elkscharity_secretary"/>
+    -->
+    <!-- active="False" hides the menu without deleting the XML id, so
+         nothing that references the id from other modules breaks. -->
+    <record id="menu_elkscharity_hours_validate" model="ir.ui.menu">
+        <field name="name">Hours Awaiting Validation (retired)</field>
+        <field name="active">False</field>
+        <field name="parent_id" ref="menu_elkscharity_hours"/>
+        <field name="action" ref="action_charity_hours_pending"/>
+        <field name="sequence">20</field>
+        <field name="groups_id" eval="[(6, 0, [ref('group_elkscharity_secretary')])]"/>
+    </record>
+
+    <menuitem id="menu_elkscharity_missing_category"
+              name="Missing Charity Category"
+              parent="menu_elkscharity_hours"
+              action="action_charity_attendance_missing_category"
+              sequence="25"
               groups="group_elkscharity_secretary"/>
 
     <menuitem id="menu_elkscharity_wrapup"

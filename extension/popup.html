@@ -51,12 +51,19 @@
   }
   button:hover { background: #f0f0f0; }
   button.primary:hover { background: #5a1a1a; }
-  #enabled-row {
+  #enabled-row, #dryrun-row {
     display: flex;
     align-items: center;
     gap: 6px;
     margin-top: 10px;
     font-size: 12px;
+  }
+  #dryrun-row {
+    padding: 6px 8px;
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 3px;
+    margin-top: 6px;
   }
   #status {
     margin-top: 12px;
@@ -87,11 +94,13 @@
 </style>
 </head>
 <body>
-  <h1>Elks.org Push — Lewiston Lodge 896</h1>
+  <h1>Elks.org Charity Push</h1>
 
-  <label for="odoo-url">Odoo URL</label>
+  <label for="odoo-url">Odoo URL
+    <span class="muted">(your lodge's Odoo server)</span>
+  </label>
   <input id="odoo-url" type="text"
-         placeholder="https://www.lewistonelks896.com"/>
+         placeholder="https://your-lodge-odoo.example.com"/>
 
   <label for="api-key">API Key
     <span class="muted">(from Preferences → Elks.org Credentials)</span>
@@ -106,6 +115,15 @@
     </label>
   </div>
 
+  <div id="dryrun-row">
+    <input id="dryRun" type="checkbox"/>
+    <label for="dryRun" style="margin:0;font-size:12px;color:#5f4b00;">
+      <strong>Dry Run</strong> — mark records as pushed WITHOUT
+      submitting to elks.org.  Payloads log to browser console.
+      Use this on test Odoo instances.
+    </label>
+  </div>
+
   <div class="row">
     <button id="save" class="primary">Save Settings</button>
     <button id="run-now">Push Now</button>
@@ -113,6 +131,14 @@
   <div class="row">
     <button id="test-odoo">Test Odoo Key</button>
     <button id="test-elks">Test Elks.org Session</button>
+  </div>
+  <div class="row">
+    <button id="preview-pending">Show Queue in Odoo</button>
+  </div>
+
+  <div id="pending-count-row" class="muted"
+       style="margin-top: 10px; font-size: 12px; text-align: center;">
+    Pending queue: <span id="pending-count">…</span>
   </div>
 
   <div id="status">

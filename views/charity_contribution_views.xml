@@ -29,13 +29,11 @@
                             string="Reset to Draft"
                             type="object"
                             invisible="state != 'confirmed'"/>
-                    <!-- Elks.org submission controls (post-confirm) -->
-                    <button name="action_push_to_elks_org"
-                            string="Push to Elks.org"
-                            type="object"
-                            class="btn-primary"
-                            icon="fa-cloud-upload"
-                            invisible="state != 'confirmed' or x_elks_org_state == 'pushed'"/>
+                    <!-- Elks.org submission controls (post-confirm).
+                         Server-side push is removed in 19.0.5.0 —
+                         confirmed contributions are picked up by the
+                         Chrome extension automatically.  Manual/skip
+                         buttons remain for edge cases. -->
                     <button name="action_mark_submitted_manually"
                             string="Mark Submitted Manually"
                             type="object"
@@ -241,18 +239,8 @@
     <!-- ═══════════════════════════════════════════════════════════
          Actions
          ═══════════════════════════════════════════════════════════ -->
-    <!-- Bulk-push server action.  Select confirmed contributions in
-         the list, then Actions ▸ "Push Selected to Elks.org (Bulk)".
-         Playwright logs in ONCE and pushes every selected row through
-         the same browser session. -->
-    <record id="action_bulk_push_to_elks_org" model="ir.actions.server">
-        <field name="name">Push Selected to Elks.org (Bulk)</field>
-        <field name="model_id" ref="model_elks_charity_contribution"/>
-        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
-        <field name="binding_view_types">list</field>
-        <field name="state">code</field>
-        <field name="code">action = records.action_bulk_push_to_elks_org()</field>
-    </record>
+    <!-- Bulk-push action removed 19.0.5.0 — the Chrome extension
+         handles bulk automatically by polling for confirmed rows. -->
 
     <record id="action_charity_contributions" model="ir.actions.act_window">
         <field name="name">Charity Contributions</field>
@@ -283,6 +271,34 @@
             <p>
                 Recurring contributions and new submissions appear
                 here for the Secretary to review and confirm.
+            </p>
+        </field>
+    </record>
+
+    <!-- Queue of contributions waiting to go out via the Chrome
+         extension.  Same view + form as All Contributions, but
+         hard-filtered to confirmed rows whose elks.org state is
+         either not_pushed or failed.  Secretary opens this before
+         hitting "Push Now" in the extension to see exactly what
+         will be submitted. -->
+    <record id="action_charity_contributions_pending_push" model="ir.actions.act_window">
+        <field name="name">Pending Elks.org Push</field>
+        <field name="res_model">elks.charity.contribution</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">
+            [('state', 'in', ('confirmed', 'reported')),
+             ('x_elks_org_state', 'in', ('not_pushed', 'failed'))]
+        </field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Nothing queued for elks.org
+            </p>
+            <p>
+                The queue is empty — every confirmed contribution
+                has been pushed to elks.org (or explicitly skipped).
+                When Secretaries validate new contributions, they
+                land here until the Chrome extension picks them up.
             </p>
         </field>
     </record>

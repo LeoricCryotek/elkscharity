@@ -117,10 +117,8 @@ const render = (mountEl, data) => {
     const [dPeople, cPeople] = heroDelta(pct.people_served);
 
     const subtitle = data.current_year
-        ? `Lodge year <strong>${escapeHtml(data.current_year)}</strong>${
-              data.prior_year ? " vs. " + escapeHtml(data.prior_year) : ""
-          } — totals from validated records only`
-        : "Totals from validated records";
+        ? `Our year-to-date totals — Lodge year <strong>${escapeHtml(data.current_year)}</strong>`
+        : "Our year-to-date totals";
 
     const cardsHtml = cards.length
         ? `<div class="row mb-3"><div class="col-12">

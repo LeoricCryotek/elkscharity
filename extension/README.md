@@ -1,9 +1,13 @@
-# Elks.org Push — Chrome Extension
+# Elks.org Charity Push — Chrome Extension
 
 Companion to the `elkscharity` Odoo 19 module.  Pushes Odoo-validated
 charity contributions to elks.org's Local Lodge Reporting form,
 using the user's own Chrome session (bypasses elks.org's server-side
 bot detection).
+
+Fully lodge-agnostic — the same extension folder works for any Lodge
+running the elkscharity module.  All lodge-specific values (Odoo URL,
+API key) are configured at install time in the popup.
 
 ## How to install (developer mode)
 
@@ -17,8 +21,8 @@ bot detection).
 
 1. In Odoo: **Preferences → Elks.org Credentials → Regenerate API
    Key**.  Copy the key from the notification.
-2. Click the extension icon → paste **Odoo URL** (e.g.
-   `https://www.lewistonelks896.com`) and the **API Key**.
+2. Click the extension icon → paste **Odoo URL** (whatever your
+   lodge's Odoo server is at) and the **API Key**.
 3. Check **Enabled**, click **Save Settings**.
 4. Click **Test Odoo Key** — should show your name.
 5. In another tab, log into <https://www.elks.org>.

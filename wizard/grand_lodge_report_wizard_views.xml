@@ -72,6 +72,17 @@
                             type="object" class="btn-secondary"
                             icon="fa-file-pdf-o"
                             invisible="state != 'choose'"/>
+                    <button string="BPOE Data Collection Form"
+                            name="action_print_bpoe_form"
+                            type="object" class="btn-secondary"
+                            icon="fa-table"
+                            invisible="state != 'choose'"
+                            title="Paper-form-style table (Columns A–J) matching the Grand Lodge Charity Workbook"/>
+                    <button string="BPOE Form (PDF)"
+                            name="action_download_bpoe_form_pdf"
+                            type="object" class="btn-secondary"
+                            icon="fa-file-pdf-o"
+                            invisible="state != 'choose'"/>
                     <button string="Export CSV (Grand Lodge Format)"
                             name="action_export_csv"
                             type="object" class="btn-secondary"

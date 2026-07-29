@@ -1,26 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!--
-      Config parameters for the elks.org auto-push.  Loaded with
-      noupdate="1" so lodges can override the URLs (e.g. when elks.org
-      changes their endpoints) without losing their custom values on
-      the next module upgrade.
+      Config parameter for the Chrome-extension elks.org push.  Loaded
+      with noupdate="1" so the lodge can override the URL (e.g. when
+      elks.org changes their endpoint) without losing the custom value
+      on the next module upgrade.
 
-      Where to change them:
+      Where to change it:
           Settings → Technical → System Parameters
           Filter for  elkscharity.elks_org_*
 
-      Defaults are the current-as-of-July-2026 URLs:
-        - Login page redirects  /login.cfm → /secure/elksLogin.cfm
-          so we use the direct URL to save one navigation.
-        - Form page is unchanged.
+      History:  the legacy elks_org_login_url param was dropped in
+      19.0.6.2 with the rest of the server-side push code.  The
+      extension authenticates through the user's live browser session
+      instead of Odoo posting credentials, so no login URL is needed.
     -->
     <data noupdate="1">
-
-        <record id="elks_org_login_url" model="ir.config_parameter">
-            <field name="key">elkscharity.elks_org_login_url</field>
-            <field name="value">https://www.elks.org/secure/elksLogin.cfm</field>
-        </record>
 
         <record id="elks_org_form_url" model="ir.config_parameter">
             <field name="key">elkscharity.elks_org_form_url</field>

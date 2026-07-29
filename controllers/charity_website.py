@@ -75,3 +75,39 @@ class ElksCharityWebsite(http.Controller):
             data["currency"] = {"symbol": "$", "position": "before"}
 
         return request.make_json_response(data)
+
+    @http.route(
+        "/elks-charity/website/leaderboard.json",
+        type="http",
+        auth="public",
+        website=True,
+        sitemap=False,
+        csrf=False,
+        methods=["GET"],
+    )
+    def charity_leaderboard_json(self, limit=None, **kw):
+        """Return the volunteer-hours leaderboard as JSON.
+
+        Two boards — this month and the current lodge year — each ranked
+        1st..Nth. Public by design; shows member full names because the
+        lodge chose to recognize volunteers publicly. Query param:
+            limit — max places per board (default 10, capped 1..25).
+        """
+        try:
+            n = int(limit) if limit else 10
+        except (TypeError, ValueError):
+            n = 10
+        n = max(1, min(n, 25))
+        try:
+            data = (
+                request.env["elks.charity.leaderboard"]
+                .sudo()
+                .get_dual(limit=n, name_mode="full")
+            )
+        except Exception:
+            # Never break the public page on a data hiccup — render empty.
+            _logger.exception(
+                "elkscharity website leaderboard: fetch failed")
+            data = {"month": [], "lodge_year": [], "month_label": "",
+                    "year_label": "", "note": ""}
+        return request.make_json_response(data)

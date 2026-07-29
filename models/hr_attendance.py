@@ -77,7 +77,13 @@ class HrAttendance(models.Model):
     )
     x_charity_notes = fields.Text("Charity Notes")
     x_validated = fields.Boolean(
-        "Validated for GL Report", default=False, tracking=True,
+        "Validated for GL Report", default=True, tracking=True,
+        help="Auto-set to True the moment a charity task is attached "
+             "(19.0.6.5+).  Was manually gated in earlier versions "
+             "when the Secretary had to check off 'yes, I entered "
+             "this on elks.org' — the Chrome extension makes that "
+             "redundant.  Uncheck manually only if you need to "
+             "exclude this row from GL totals for some reason.",
     )
     x_validated_by = fields.Many2one(
         "res.users", string="Validated By", readonly=True, copy=False,
@@ -182,6 +188,15 @@ class HrAttendance(models.Model):
         records = super().create(vals_list)
         charity_records = records.filtered('x_charity_task_id')
         if charity_records:
+            # Auto-validate every charity attendance row on create so
+            # hours count immediately.  Prior versions gated on a
+            # manual click — see field docstring.
+            charity_records._auto_validate_charity()
+            # Attendance is authoritative — remove any Quick Entry
+            # personal-record line that covers the same person + task
+            # + date, and reduce the parent contribution's declared
+            # hours by the removed PR share.  See _reconcile_pr_lines.
+            charity_records._reconcile_pr_lines()
             charity_records._invalidate_charity_tasks()
         return records
 
@@ -191,10 +206,130 @@ class HrAttendance(models.Model):
         if self._CHARITY_TRIGGER_FIELDS & set(vals):
             old_tasks = self.mapped('x_charity_task_id')
         res = super().write(vals)
+        # If someone JUST attached a charity task to an existing
+        # attendance row, auto-validate the same as we do on create.
+        if 'x_charity_task_id' in vals and vals.get('x_charity_task_id'):
+            newly_tagged = self.filtered('x_charity_task_id')
+            newly_tagged._auto_validate_charity()
+            newly_tagged._reconcile_pr_lines()
+        elif ('check_in' in vals or 'x_charity_hours' in vals) and (
+                self._CHARITY_TRIGGER_FIELDS & set(vals)):
+            # Attendance date or hours changed — re-check for PR
+            # matches on the (possibly new) date.
+            self.filtered('x_charity_task_id')._reconcile_pr_lines()
         if self._CHARITY_TRIGGER_FIELDS & set(vals):
             new_tasks = self.mapped('x_charity_task_id')
             self._invalidate_charity_tasks(old_tasks | new_tasks)
         return res
+
+    def _auto_validate_charity(self):
+        """Flip x_validated=True on charity attendance rows that aren't
+        already validated.  Idempotent."""
+        needs_flip = self.filtered(
+            lambda r: r.x_charity_task_id and not r.x_validated
+        )
+        if not needs_flip:
+            return
+        needs_flip.sudo().write({
+            'x_validated': True,
+            'x_validated_by': self.env.user.id,
+            'x_validated_on': fields.Date.context_today(self),
+        })
+
+    def _reconcile_pr_lines(self):
+        """Attendance is the authoritative source of truth for a
+        person's charity hours.  When new charity attendance arrives
+        for (employee, task, date) that already has a Quick Entry
+        personal-record line for the same tuple:
+
+          1. Delete the personal-record analytic line — it's stale
+             the moment the real clock-in shows up.
+          2. Reduce the parent contribution's declared elks/helper
+             hours + miles by the removed PR share so the total that
+             pushes to elks.org reflects reality (attendance replaces
+             the estimate).
+          3. Chatter-log the swap on the contribution so the audit
+             trail is preserved.
+
+        Idempotent: subsequent attendance edits find no PR line and
+        no-op.  If attendance is later deleted, the contribution is
+        NOT restored — the Secretary can re-attribute manually if
+        that's really wanted.
+        """
+        AAL = self.env["account.analytic.line"].sudo()
+        for att in self:
+            if not att.x_charity_task_id or not att.check_in:
+                continue
+            att_date = att.check_in.date()
+            matching_prs = AAL.search([
+                ("task_id", "=", att.x_charity_task_id.id),
+                ("employee_id", "=", att.employee_id.id),
+                ("date", "=", att_date),
+                ("x_personal_record", "=", True),
+            ])
+            if not matching_prs:
+                continue
+            # Group PR lines by parent contribution so we adjust each
+            # contribution once with the total-of-shared-lines.
+            contribs_touched = {}
+            for pr in matching_prs:
+                contrib = pr.x_source_contribution_id
+                key = contrib.id if contrib else 0
+                if key not in contribs_touched:
+                    contribs_touched[key] = {
+                        "contrib": contrib,
+                        "elk_hours": 0.0,
+                        "help_hours": 0.0,
+                        "elk_miles": 0.0,
+                        "help_miles": 0.0,
+                        "employees": set(),
+                    }
+                bucket = contribs_touched[key]
+                if pr.x_is_helper:
+                    bucket["help_hours"] += pr.unit_amount
+                    bucket["help_miles"] += pr.x_miles or 0.0
+                else:
+                    bucket["elk_hours"] += pr.unit_amount
+                    bucket["elk_miles"] += pr.x_miles or 0.0
+                bucket["employees"].add(pr.employee_id.name)
+
+            for info in contribs_touched.values():
+                contrib = info["contrib"]
+                if contrib:
+                    contrib.sudo().write({
+                        "elks_hours": max(
+                            0.0, (contrib.elks_hours or 0.0)
+                                 - info["elk_hours"]),
+                        "helper_hours": max(
+                            0.0, (contrib.helper_hours or 0.0)
+                                 - info["help_hours"]),
+                        "elks_miles": max(
+                            0.0, (contrib.elks_miles or 0.0)
+                                 - info["elk_miles"]),
+                        "helper_miles": max(
+                            0.0, (contrib.helper_miles or 0.0)
+                                 - info["help_miles"]),
+                    })
+                    contrib.message_post(
+                        body=_(
+                            "<strong>Attendance override applied.</strong>"
+                            "<br/>%(who)s clocked in for this "
+                            "activity on %(date)s — their personal-"
+                            "record share (Elk hrs %(eh).2f · miles "
+                            "%(em).2f · Helper hrs %(hh).2f · miles "
+                            "%(hm).2f) has been removed from this "
+                            "contribution's declared totals and "
+                            "replaced by the actual attendance.",
+                            who=", ".join(sorted(info["employees"])),
+                            date=att_date,
+                            eh=info["elk_hours"],
+                            em=info["elk_miles"],
+                            hh=info["help_hours"],
+                            hm=info["help_miles"],
+                        ),
+                        subtype_xmlid="mail.mt_note",
+                    )
+            matching_prs.unlink()
 
     def unlink(self):
         tasks = self.mapped('x_charity_task_id')

@@ -156,14 +156,23 @@ class GrandLodgeReportWizard(models.TransientModel):
                 'program_name': task.name,
                 'category_code': task.x_charity_category_code or '',
                 'head_count': task.x_head_count + c_heads,
-                'num_elks': len(set(
-                    ts_elks.mapped('employee_id.id')
-                    + att_elks.mapped('employee_id.id')
-                )) + c_elks,
-                'num_helpers': len(set(
-                    ts_help.mapped('employee_id.id')
-                    + att_help.mapped('employee_id.id')
-                )) + c_helpers,
+                # Headcount rule (19.0.6.6): GREATEST of declared vs
+                # named — never sum, to avoid the Quick Entry + tagged
+                # attendance double-count.
+                'num_elks': max(
+                    len(set(
+                        ts_elks.mapped('employee_id.id')
+                        + att_elks.mapped('employee_id.id')
+                    )),
+                    c_elks,
+                ),
+                'num_helpers': max(
+                    len(set(
+                        ts_help.mapped('employee_id.id')
+                        + att_help.mapped('employee_id.id')
+                    )),
+                    c_helpers,
+                ),
                 'elks_hours': (
                     sum(ts_elks.mapped('unit_amount'))
                     + sum(
@@ -407,6 +416,26 @@ class GrandLodgeReportWizard(models.TransientModel):
         self.ensure_one()
         report = self.env.ref(
             'elkscharity.action_report_gl_entry_sheet_pdf'
+        )
+        return report.report_action(self)
+
+    def action_print_bpoe_form(self):
+        """Preview the BPOE Data Collection Survey (HTML) — paper-
+        form-style table matching the Grand Lodge Charity Workbook.
+        Same numbers as the elks.org push and the standard report,
+        just laid out with Columns A–J across the page for hand
+        entry / signature."""
+        self.ensure_one()
+        report = self.env.ref(
+            'elkscharity.action_report_bpoe_data_collection'
+        )
+        return report.report_action(self)
+
+    def action_download_bpoe_form_pdf(self):
+        """Download the BPOE Data Collection Survey as PDF."""
+        self.ensure_one()
+        report = self.env.ref(
+            'elkscharity.action_report_bpoe_data_collection_pdf'
         )
         return report.report_action(self)
 

@@ -169,6 +169,17 @@ class ProjectTask(models.Model):
             att_elks = att_validated.filtered(lambda a: not a.x_is_helper)
             att_help = att_validated.filtered('x_is_helper')
 
+            # Personal-record lines from Quick Entry — attributed
+            # people who should count toward Unique/# Elks but whose
+            # HOURS must stay out of the roll-up (the contribution
+            # already carries the summed hours).  Get every line for
+            # this task with x_personal_record=True.
+            pr_lines = rec.timesheet_ids.filtered(
+                lambda l: l.x_personal_record
+            )
+            pr_elks = pr_lines.filtered(lambda l: not l.x_is_helper)
+            pr_help = pr_lines.filtered('x_is_helper')
+
             # --- confirmed contributions ---
             contrib_cash = 0.0
             contrib_non_cash = 0.0
@@ -212,14 +223,25 @@ class ProjectTask(models.Model):
                 sum(ts_help.mapped('x_miles'))
                 + sum(att_help.mapped('x_miles'))
             )
-            rec.x_elks_count = len(set(
+            # Headcount rule (19.0.6.7): GREATEST of contribution's
+            # DECLARED count vs. the unique people we can name from
+            # ANY tagged source — validated attendance, validated
+            # timesheets, AND personal-record lines (Quick Entry
+            # attributions).  Personal records are tagged people even
+            # though their hours are excluded from GL totals to avoid
+            # double-counting the contribution.
+            line_elks_unique = len(set(
                 ts_elks.mapped('employee_id.id')
                 + att_elks.mapped('employee_id.id')
-            )) + contrib_elks
-            rec.x_helper_count = len(set(
+                + pr_elks.mapped('employee_id.id')
+            ))
+            line_help_unique = len(set(
                 ts_help.mapped('employee_id.id')
                 + att_help.mapped('employee_id.id')
-            )) + contrib_helpers
+                + pr_help.mapped('employee_id.id')
+            ))
+            rec.x_elks_count = max(line_elks_unique, contrib_elks)
+            rec.x_helper_count = max(line_help_unique, contrib_helpers)
             rec.x_cash_total = (
                 sum(ts_kept.mapped('x_cash_value'))
                 + sum(att_validated.mapped('x_cash_value'))
@@ -239,6 +261,134 @@ class ProjectTask(models.Model):
     # Not Covered" so every charity activity rolls up somewhere on the
     # dashboard instead of falling off the map.
     # ------------------------------------------------------------------
+    def action_generate_contribution_from_attendance(self):
+        """Aggregate validated charity attendance for THIS task into a
+        single draft contribution.
+
+        Bucket rule: one contribution per (task, event_date).  Event
+        date is x_event_date if set, otherwise the earliest attendance
+        check-in date.  If a source='attendance' contribution already
+        exists for that bucket, we UPDATE it (idempotent — re-running
+        after new attendance is validated keeps the totals fresh).
+
+        Never confirms — the Secretary reviews the draft, edits if
+        needed, and hits Confirm.  Only then does the Chrome extension
+        pick it up.
+        """
+        self.ensure_one()
+        if not self.x_is_charity_activity:
+            raise UserError(_(
+                "This task isn't marked as a charity activity."
+            ))
+        if not self.x_charity_category_id:
+            raise UserError(_(
+                "Set a GL Category on this task before generating a "
+                "contribution — elks.org requires a Program ID."
+            ))
+
+        # Pull every validated charity attendance for this task.
+        Attendance = self.env["hr.attendance"].sudo()
+        atts = Attendance.search([
+            ("x_charity_task_id", "=", self.id),
+            ("x_validated", "=", True),
+            ("check_out", "!=", False),
+        ])
+        if not atts:
+            raise UserError(_(
+                "No validated charity attendance found for this task.  "
+                "Ask volunteers to clock in against this activity and "
+                "have a Secretary validate the rows first."
+            ))
+
+        # Aggregate.
+        elks_atts = atts.filtered(lambda a: not a.x_is_helper)
+        help_atts = atts.filtered("x_is_helper")
+
+        elks_hours = sum(
+            a.x_charity_hours or a.worked_hours or 0.0
+            for a in elks_atts
+        )
+        help_hours = sum(
+            a.x_charity_hours or a.worked_hours or 0.0
+            for a in help_atts
+        )
+        elks_count = len(set(elks_atts.mapped("employee_id.id")))
+        help_count = len(set(help_atts.mapped("employee_id.id")))
+        elks_miles = sum(elks_atts.mapped("x_miles") or [0.0])
+        help_miles = sum(help_atts.mapped("x_miles") or [0.0])
+        cash = sum(atts.mapped("x_cash_value") or [0.0])
+        non_cash = sum(atts.mapped("x_non_cash_value") or [0.0])
+
+        event_date = (
+            self.x_event_date
+            or min(a.check_in.date() for a in atts if a.check_in)
+        )
+
+        Contrib = self.env["elks.charity.contribution"].sudo()
+        existing = Contrib.search([
+            ("task_id", "=", self.id),
+            ("contribution_date", "=", event_date),
+            ("x_source", "=", "attendance"),
+        ], limit=1)
+
+        vals = {
+            "name": self.name or self.x_charity_category_id.name,
+            "contribution_date": event_date,
+            "contribution_type": "service",
+            "task_id": self.id,
+            "head_count": self.x_total_head_count or (elks_count + help_count),
+            "elks_count": elks_count,
+            "helper_count": help_count,
+            "elks_hours": elks_hours,
+            "helper_hours": help_hours,
+            "elks_miles": elks_miles,
+            "helper_miles": help_miles,
+            "cash_value": cash,
+            "non_cash_value": non_cash,
+            "x_source": "attendance",
+        }
+
+        if existing:
+            if existing.state != "draft":
+                raise UserError(_(
+                    "The existing attendance-generated contribution for "
+                    "%s on %s is already %s.  Reset it to draft first "
+                    "if you want to re-aggregate.",
+                    self.name, event_date, existing.state,
+                ))
+            existing.write(vals)
+            contrib = existing
+            action_name = _("Contribution Updated from Attendance")
+        else:
+            vals["state"] = "draft"
+            contrib = Contrib.create(vals)
+            action_name = _("Contribution Created from Attendance")
+
+        contrib.message_post(
+            body=_(
+                "<strong>%(name)s</strong><br/>"
+                "Aggregated from %(n)d validated attendance row(s):<br/>"
+                "%(ec)d Elks (%(eh).1f hrs) · "
+                "%(hc)d Helpers (%(hh).1f hrs) · "
+                "$%(cash).0f cash / $%(nc).0f in-kind.",
+                name=action_name, n=len(atts),
+                ec=elks_count, eh=elks_hours,
+                hc=help_count, hh=help_hours,
+                cash=cash, nc=non_cash,
+            ),
+            message_type="comment",
+            subtype_xmlid="mail.mt_note",
+        )
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": action_name,
+            "res_model": "elks.charity.contribution",
+            "res_id": contrib.id,
+            "view_mode": "form",
+            "target": "current",
+        }
+
     def action_prepare_charity_submission(self):
         """Open the Quick Entry wizard pre-populated with this task's
         validated roll-up totals.

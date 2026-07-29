@@ -1,28 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Per-user elks.org credentials + API key for the browser extension.
+"""Per-user API key for the Elks.org Push Chrome extension.
 
-Two integration paths, both per-user:
+The extension uses the user's live browser session for elks.org auth
+(cookies from the actual www.elks.org tab), so we never touch or store
+elks.org credentials on the Odoo side — only the API key that the
+extension uses to talk BACK to Odoo.
 
-1. Server-side auto-push (legacy, 19.0.2.x):
-   x_elks_org_login + x_elks_org_password.  Odoo POSTs directly to
-   elks.org using requests/Playwright.  Currently blocked by elks.org's
-   server-side bot detection.
-
-2. Browser-extension push (19.0.3.0+):
-   x_elks_org_api_key.  Extension polls Odoo with this key, pulls
-   pending contributions, submits them from the user's real Chrome
-   using their live elks.org session cookies.
-
-The two paths coexist so lodges can pick whichever works for them.
-
-Storage note: the password is stored in a Char with password=True so
-the widget masks it in the UI.  Same pattern Odoo core uses for
-fetchmail / outgoing-mail server passwords.  The extension API key is
-generated server-side via a button (so the user never types it or
-picks a weak one) and shown once, masked afterward.
-
-Only the user themselves and administrators can read the secret fields,
-and password=True hides them from _read_group / search.
+History note: earlier versions (19.0.2.x) tried server-side push via
+Playwright + stored login/password.  Elks.org's bot detection blocked
+that path definitively.  As of 19.0.5.0 the legacy fields (login,
+password, enabled, last_success) are removed — see the pre-migrate in
+migrations/19.0.5.0/pre-migrate.py for the DB cleanup.
 """
 import logging
 import secrets
@@ -36,30 +24,6 @@ _logger = logging.getLogger(__name__)
 class ResUsersElksOrg(models.Model):
     _inherit = "res.users"
 
-    # ── Server-side push (legacy path) ─────────────────────────────
-    x_elks_org_enabled = fields.Boolean(
-        "Auto-Push Charity Entries to Elks.org", default=False,
-        help="When enabled, confirming a charity contribution "
-             "automatically POSTs it to elks.org using the login below. "
-             "NOTE: server-side push is currently blocked by elks.org's "
-             "bot detection.  Prefer the browser-extension flow — see "
-             "Elks Charity → Configuration → Elks.org Push Setup.",
-    )
-    x_elks_org_login = fields.Char(
-        "Elks.org Login",
-        help="Your elks.org member login (typically your member number "
-             "or email — same value you use at https://www.elks.org/login.cfm).",
-    )
-    x_elks_org_password = fields.Char(
-        "Elks.org Password",
-        help="Your elks.org password.  Masked in the UI.  Reset via "
-             "elks.org, then update it here.",
-    )
-    x_elks_org_last_success = fields.Datetime(
-        "Last Successful Push", readonly=True,
-    )
-
-    # ── Browser-extension path (19.0.3.0) ──────────────────────────
     x_elks_org_api_key = fields.Char(
         "Elks.org Extension API Key",
         readonly=True,
@@ -73,15 +37,16 @@ class ResUsersElksOrg(models.Model):
     x_elks_org_api_key_created = fields.Datetime(
         "API Key Created On", readonly=True, copy=False,
     )
+    x_elks_org_last_success = fields.Datetime(
+        "Last Successful Push", readonly=True,
+        help="Timestamp of the most recent successful contribution "
+             "submission attributed to this user (set by the extension "
+             "controller via mark_pushed).",
+    )
 
-    # Include the new fields in the user preferences form so users
-    # can self-service without needing admin access.
     @property
     def SELF_READABLE_FIELDS(self):
         return super().SELF_READABLE_FIELDS + [
-            "x_elks_org_enabled",
-            "x_elks_org_login",
-            "x_elks_org_password",
             "x_elks_org_last_success",
             "x_elks_org_api_key",
             "x_elks_org_api_key_created",
@@ -89,15 +54,10 @@ class ResUsersElksOrg(models.Model):
 
     @property
     def SELF_WRITEABLE_FIELDS(self):
-        return super().SELF_WRITEABLE_FIELDS + [
-            "x_elks_org_enabled",
-            "x_elks_org_login",
-            "x_elks_org_password",
-            # api_key is intentionally NOT self-writeable — the user
-            # can only change it via action_regenerate_elks_org_api_key
-            # so we control the format + always update the created-on
-            # timestamp.
-        ]
+        # api_key is intentionally NOT self-writeable — the user can
+        # only change it via action_regenerate_elks_org_api_key so we
+        # control the format and always update the created-on timestamp.
+        return super().SELF_WRITEABLE_FIELDS
 
     # ── API key management ─────────────────────────────────────────
     def action_regenerate_elks_org_api_key(self):
@@ -153,12 +113,3 @@ class ResUsersElksOrg(models.Model):
         )
         return user
 
-    def _elks_org_password_clear(self):
-        """Return the raw elks.org password for HTTP client use.
-
-        Kept as a method (not a direct field access in the client)
-        so it's easy to swap in stronger storage (Fernet + keyring)
-        later without touching call sites.
-        """
-        self.ensure_one()
-        return self.sudo().x_elks_org_password or ""

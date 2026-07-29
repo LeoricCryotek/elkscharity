@@ -37,7 +37,7 @@ const ELKS_SESSION_URL =           // used to detect "logged in?"
 async function getSettings() {
     return new Promise((res) => {
         chrome.storage.local.get(
-            ["odooUrl", "apiKey", "enabled"],
+            ["odooUrl", "apiKey", "enabled", "dryRun"],
             (v) => res(v || {}),
         );
     });
@@ -245,7 +245,7 @@ async function submitOne(formUrl, payload) {
 
 // ── main poll cycle ────────────────────────────────────────────────
 async function pollAndPush() {
-    const {enabled, odooUrl, apiKey} = await getSettings();
+    const {enabled, odooUrl, apiKey, dryRun} = await getSettings();
     if (!enabled) {
         await setStatus({state: "disabled"});
         return;
@@ -258,17 +258,22 @@ async function pollAndPush() {
         return;
     }
 
-    // Are we logged into elks.org?  Do this FIRST so we can tell the
-    // user why nothing is being pushed.
-    const sess = await elksSessionAlive();
-    if (!sess.ok) {
-        await setStatus({
-            state: "no_elks_session",
-            message:
-                "Log in at elks.org to enable pushes (session check " +
-                "landed at " + sess.url + ").",
-        });
-        return;
+    // DRY RUN skips the elks.org session check entirely — the whole
+    // point of dry run is to exercise the Odoo side without needing
+    // an authenticated elks.org tab at all.
+    if (!dryRun) {
+        // Are we logged into elks.org?  Do this FIRST so we can tell
+        // the user why nothing is being pushed.
+        const sess = await elksSessionAlive();
+        if (!sess.ok) {
+            await setStatus({
+                state: "no_elks_session",
+                message:
+                    "Log in at elks.org to enable pushes (session " +
+                    "check landed at " + sess.url + ").",
+            });
+            return;
+        }
     }
 
     // Ask Odoo for pending.
@@ -320,7 +325,22 @@ async function pollAndPush() {
     let successes = 0, failures = 0;
     for (const it of items) {
         try {
-            const result = await submitOne(formUrl, it.payload);
+            let result;
+            if (dryRun) {
+                // Print the exact payload to devtools so QA can inspect.
+                console.log(
+                    "[Elks.org Push · DRY RUN] would submit:",
+                    JSON.stringify(it.payload, null, 2),
+                );
+                result = {
+                    ok: true,
+                    confirmation:
+                        "DRY RUN — payload logged to browser console, " +
+                        "NOT submitted to elks.org",
+                };
+            } else {
+                result = await submitOne(formUrl, it.payload);
+            }
             if (result.ok) {
                 await odooPost("/elkscharity/ext/v1/mark_pushed", {
                     contribution_id: it.id,
@@ -352,6 +372,7 @@ async function pollAndPush() {
     await setStatus({
         state: failures === 0 ? "idle" : "partial",
         message:
+            (dryRun ? "DRY RUN — " : "") +
             (successes ? successes + " pushed" : "") +
             (successes && failures ? ", " : "") +
             (failures ? failures + " failed" : "") +

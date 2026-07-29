@@ -1,0 +1,148 @@
+// =============================================================================
+// === HUMAN ===
+// Styling for the public "Volunteer Hours Leaderboard" snippet: the top
+// volunteer shown large in a gold-trimmed card, and places 2–10 as a tidy
+// ranked list, with the Elks purple/gold palette.
+// === AI AGENT ===
+// Loaded in web.assets_frontend. Scoped to .s_elks_leaderboard so it never
+// touches other website content. Structure is built by
+// charity_leaderboard_snippet.js.
+// =============================================================================
+
+$elks-purple: #5b3b8c;
+$elks-purple-deep: #3f2566;
+$elks-gold: #c9a227;
+$elks-pale: #f3eefb;
+
+.s_elks_leaderboard {
+
+    .s_elks_lb_board {
+        background: #ffffff;
+        border: 1px solid rgba($elks-purple, 0.15);
+        border-radius: 12px;
+        padding: 1.25rem 1.25rem 1.5rem;
+        height: 100%;
+        box-shadow: 0 4px 18px rgba($elks-purple-deep, 0.08);
+    }
+
+    .s_elks_lb_board_head {
+        text-align: center;
+        border-bottom: 2px solid $elks-gold;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .s_elks_lb_board_title {
+        color: $elks-purple-deep;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        margin: 0;
+    }
+    .s_elks_lb_board_sub {
+        color: $elks-purple;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    // --- Champion (#1), featured large -------------------------------------
+    .s_elks_lb_champion {
+        text-align: center;
+        background: linear-gradient(160deg, $elks-pale 0%, #ffffff 100%);
+        border: 2px solid $elks-gold;
+        border-radius: 12px;
+        padding: 1.1rem 1rem 1.25rem;
+        margin-bottom: 1rem;
+    }
+    .s_elks_lb_champion_crown {
+        font-size: 2.4rem;
+        line-height: 1;
+    }
+    .s_elks_lb_champion_name {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: $elks-purple-deep;
+        line-height: 1.15;
+        margin-top: 0.25rem;
+    }
+    .s_elks_lb_champion_hours {
+        margin-top: 0.35rem;
+    }
+    .s_elks_lb_champion_num {
+        font-size: 2.6rem;
+        font-weight: 900;
+        color: $elks-gold;
+        line-height: 1;
+    }
+    .s_elks_lb_champion_unit {
+        font-size: 1rem;
+        color: $elks-purple;
+        margin-left: 0.25rem;
+    }
+    .s_elks_lb_champion_tag {
+        display: inline-block;
+        margin-top: 0.5rem;
+        background: $elks-purple;
+        color: #ffffff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        padding: 2px 12px;
+        border-radius: 999px;
+    }
+
+    // --- Places 2..N -------------------------------------------------------
+    .s_elks_lb_list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        counter-reset: none;
+    }
+    .s_elks_lb_row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0.35rem;
+        border-bottom: 1px solid rgba($elks-purple, 0.1);
+        font-size: 1.02rem;
+    }
+    .s_elks_lb_row:last-child {
+        border-bottom: 0;
+    }
+    .s_elks_lb_rank {
+        flex: 0 0 1.9rem;
+        text-align: center;
+        font-weight: 800;
+        color: #ffffff;
+        background: $elks-purple;
+        border-radius: 50%;
+        width: 1.9rem;
+        height: 1.9rem;
+        line-height: 1.9rem;
+        font-size: 0.9rem;
+    }
+    .s_elks_lb_name {
+        flex: 1 1 auto;
+        color: $elks-purple-deep;
+        font-weight: 600;
+    }
+    .s_elks_lb_hours {
+        flex: 0 0 auto;
+        font-weight: 800;
+        color: $elks-gold;
+    }
+    .s_elks_lb_hours small {
+        color: $elks-purple;
+        font-weight: 600;
+    }
+
+    .s_elks_lb_note {
+        background: $elks-pale;
+        border-left: 4px solid $elks-gold;
+        border-radius: 6px;
+        padding: 1rem 1.25rem;
+        color: $elks-purple-deep;
+        font-size: 1.02rem;
+        line-height: 1.5;
+    }
+}

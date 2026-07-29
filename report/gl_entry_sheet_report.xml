@@ -28,6 +28,164 @@
         <field name="paperformat_id" ref="base.paperformat_us"/>
     </record>
 
+    <!-- Context-aware GL Entry Sheet bound to contribution recordsets
+         so Print > appears on the Contributions list/form as an
+         alternative to the BPOE table format. -->
+    <record id="action_report_gl_entry_sheet_contribution_pdf" model="ir.actions.report">
+        <field name="name">GL Website Entry Sheet</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">elkscharity.report_gl_entry_sheet_contribs</field>
+        <field name="report_file">elkscharity.report_gl_entry_sheet_contribs</field>
+        <field name="print_report_name">
+            'GL_Entry_Sheet_%s' % (len(docs))
+        </field>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- Template variant that iterates contribution docs directly
+         (bypasses the wizard's _get_report_data) — one card per
+         selected contribution. -->
+    <template id="report_gl_entry_sheet_contribs">
+        <t t-call="web.html_container">
+            <t t-set="settings"
+               t-value="docs.env['elks.lodge.settings'].sudo().search([], limit=1)"/>
+            <div class="page" style="font-family: Arial, sans-serif; font-size: 11px;">
+                <table style="width: 100%; margin-bottom: 10px; border: none;">
+                    <tr>
+                        <td style="width: 15%; text-align: center;
+                                   vertical-align: middle; border: none; padding: 0;">
+                            <t t-if="settings and settings.logo_primary">
+                                <img t-att-src="image_data_uri(settings.logo_primary)"
+                                     style="max-height: 70px; max-width: 90px;"
+                                     alt="Elks USA"/>
+                            </t>
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;
+                                   border: none; padding: 0 10px;">
+                            <h2 style="font-size: 20px; margin: 0 0 2px 0; color: #333;">
+                                <t t-if="settings and settings.name">
+                                    <span t-field="settings.name"/>
+                                </t>
+                                <t t-else="">Elks Lodge</t>
+                                <t t-if="settings and settings.lodge_number">
+                                    #<span t-field="settings.lodge_number"/>
+                                </t>
+                            </h2>
+                            <h3 style="font-size: 16px; margin: 6px 0 0 0; color: #003366;">
+                                GL Website Entry Sheet — Selected Contributions
+                            </h3>
+                            <p style="font-size: 11px; color: #333; margin: 4px 0 0 0;">
+                                <t t-out="len(docs)"/> contribution(s)
+                            </p>
+                        </td>
+                        <td style="width: 15%; text-align: center;
+                                   vertical-align: middle; border: none; padding: 0;">
+                            <t t-if="settings and settings.logo_lodge">
+                                <img t-att-src="image_data_uri(settings.logo_lodge)"
+                                     style="max-height: 70px; max-width: 90px;"
+                                     alt="Lodge Logo"/>
+                            </t>
+                        </td>
+                    </tr>
+                </table>
+                <div style="border-top: 2px solid #003366; margin-bottom: 12px;"/>
+                <p style="font-size: 10px; color: #555; margin-bottom: 14px;">
+                    Each card mirrors one line of the Grand Lodge Charitable
+                    Giving website form. Read across and enter the values
+                    in order.
+                </p>
+
+                <t t-set="entry_num" t-value="0"/>
+                <t t-foreach="docs" t-as="c">
+                    <t t-set="entry_num" t-value="entry_num + 1"/>
+                    <t t-set="cat" t-value="c.charity_category_id"/>
+
+                    <div style="border: 1px solid #999; border-radius: 4px;
+                                padding: 8px 12px; margin-bottom: 10px;
+                                page-break-inside: avoid;">
+                        <div style="background-color: #003366; color: white;
+                                    padding: 4px 8px; margin: -8px -12px 8px -12px;
+                                    border-radius: 3px 3px 0 0;
+                                    font-size: 12px; font-weight: bold;">
+                            Entry #<t t-out="entry_num"/>
+                            <span style="float: right; font-weight: normal; font-size: 10px;">
+                                <t t-out="c.contribution_date"/>
+                            </span>
+                        </div>
+
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <tr>
+                                <td colspan="2" style="padding: 3px 6px;">
+                                    <strong style="color: #003366;">Program:</strong>
+                                    [<t t-out="cat.code or '----'"/>]
+                                    <t t-out="cat.name or 'Uncategorized'"/> —
+                                    <t t-out="c.name"/>
+                                </td>
+                            </tr>
+                        </table>
+                        <div style="border-top: 1px dashed #ccc; margin: 4px 0;"/>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <tr>
+                                <td style="width: 25%; padding: 2px 6px;"><strong>Head Count:</strong></td>
+                                <td style="width: 25%; padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    <t t-out="c.head_count or 0"/>
+                                </td>
+                                <td style="width: 25%; padding: 2px 6px;"><strong># Elks:</strong></td>
+                                <td style="width: 25%; padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    <t t-out="c.elks_count or 0"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 2px 6px;"><strong># Helpers:</strong></td>
+                                <td style="padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    <t t-out="c.helper_count or 0"/>
+                                </td>
+                                <td style="padding: 2px 6px;"><strong>Elk Hours:</strong></td>
+                                <td style="padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    <t t-out="'%.0f' % (c.elks_hours or 0)"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 2px 6px;"><strong>Helper Hours:</strong></td>
+                                <td style="padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    <t t-out="'%.0f' % (c.helper_hours or 0)"/>
+                                </td>
+                                <td style="padding: 2px 6px;"><strong>Elk Miles:</strong></td>
+                                <td style="padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    <t t-out="'%.0f' % (c.elks_miles or 0)"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 2px 6px;"><strong>Helper Miles:</strong></td>
+                                <td style="padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    <t t-out="'%.0f' % (c.helper_miles or 0)"/>
+                                </td>
+                                <td style="padding: 2px 6px;"><strong>Non-Cash:</strong></td>
+                                <td style="padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    $<t t-out="'%.2f' % (c.non_cash_value or 0)"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 2px 6px;"><strong>Cash:</strong></td>
+                                <td style="padding: 2px 6px; font-weight: bold; font-size: 13px;">
+                                    $<t t-out="'%.2f' % (c.cash_value or 0)"/>
+                                </td>
+                                <td colspan="2" style="padding: 2px 6px; text-align: right;">
+                                    <span style="font-size: 9px; color: #888;">
+                                        &#x2610; entered
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </t>
+            </div>
+        </t>
+    </template>
+
     <!-- QWeb template — one card per line item, matching the GL website form -->
     <template id="report_gl_entry_sheet">
         <t t-call="web.html_container">

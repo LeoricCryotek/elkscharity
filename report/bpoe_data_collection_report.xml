@@ -1,0 +1,708 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ================================================================
+         BPOE Data Collection Survey — paper-form-style PDF
+         Reproduces the "Data Collection Survey of Volunteer, Youth,
+         Charitable and Community Service Programs" grid from the
+         Grand Lodge Charity Records Workbook (Code 511100).
+
+         Layout: 10 columns A–J across the page, landscape US Letter
+         so all columns fit without wrapping.  Grouped by GL section
+         and category; each category shows a subtotal; document ends
+         with a grand total and a signature block for the Committee
+         Chair and Secretary.
+
+         Two report actions:
+           - HTML preview (report_type qweb-html)  → in-browser
+           - PDF download  (report_type qweb-pdf)  → attach / print
+
+         Both bind to elks.grand.lodge.report.wizard so the date-range
+         + filter fields already on that wizard drive what's included.
+         ================================================================ -->
+
+    <!-- Landscape US Letter paperformat so the 10-column table fits
+         with room for headers.  Small margins to maximize usable
+         horizontal space. -->
+    <record id="paperformat_bpoe_landscape" model="report.paperformat">
+        <field name="name">BPOE Data Collection (Landscape Letter)</field>
+        <field name="default" eval="False"/>
+        <field name="format">Letter</field>
+        <field name="orientation">Landscape</field>
+        <field name="margin_top">10</field>
+        <field name="margin_bottom">10</field>
+        <field name="margin_left">6</field>
+        <field name="margin_right">6</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">5</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <record id="action_report_bpoe_data_collection" model="ir.actions.report">
+        <field name="name">BPOE Data Collection Survey</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">elkscharity.report_bpoe_data_collection</field>
+        <field name="report_file">elkscharity.report_bpoe_data_collection</field>
+        <field name="print_report_name">
+            'BPOE_Data_Collection_%s_%s' % (object.date_from, object.date_to)
+        </field>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="paperformat_bpoe_landscape"/>
+    </record>
+
+    <record id="action_report_bpoe_data_collection_pdf" model="ir.actions.report">
+        <field name="name">BPOE Data Collection Survey (PDF)</field>
+        <field name="model">elks.grand.lodge.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">elkscharity.report_bpoe_data_collection</field>
+        <field name="report_file">elkscharity.report_bpoe_data_collection</field>
+        <field name="print_report_name">
+            'BPOE_Data_Collection_%s_%s' % (object.date_from, object.date_to)
+        </field>
+        <field name="paperformat_id" ref="paperformat_bpoe_landscape"/>
+    </record>
+
+    <!-- ============================================================
+         Context-aware variant — bound to elks.charity.contribution.
+         binding_model_id + binding_type=report makes this show up in
+         the Print dropdown on the Contributions list/form.  Secretary
+         selects one or many contributions, hits Print → BPOE Data
+         Collection Form, and gets a paper form covering EXACTLY those
+         records — no need to open a wizard, pick dates, or filter.
+         ============================================================ -->
+    <record id="action_report_bpoe_contribution_pdf" model="ir.actions.report">
+        <field name="name">BPOE Data Collection Form</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">elkscharity.report_bpoe_data_collection_contribs</field>
+        <field name="report_file">elkscharity.report_bpoe_data_collection_contribs</field>
+        <field name="print_report_name">
+            'BPOE_Data_Collection_%s' % (len(docs))
+        </field>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="paperformat_bpoe_landscape"/>
+    </record>
+
+    <!-- Also bind the existing HTML preview so Secretaries can peek
+         before generating the PDF. -->
+    <record id="action_report_bpoe_contribution_html" model="ir.actions.report">
+        <field name="name">BPOE Data Collection (Preview)</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">elkscharity.report_bpoe_data_collection_contribs</field>
+        <field name="report_file">elkscharity.report_bpoe_data_collection_contribs</field>
+        <field name="print_report_name">
+            'BPOE_Data_Collection_%s' % (len(docs))
+        </field>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="paperformat_bpoe_landscape"/>
+    </record>
+
+    <!-- ============================================================
+         The template.
+         Reuses wizard._get_report_data() so the numbers are IDENTICAL
+         to the other Grand Lodge reports and the elks.org push
+         payloads — no risk of the paper form disagreeing with the
+         electronic submission.
+         ============================================================ -->
+    <template id="report_bpoe_data_collection">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="wizard">
+                <t t-set="settings"
+                   t-value="wizard.env['elks.lodge.settings'].sudo().search([], limit=1)"/>
+                <t t-set="result" t-value="wizard._get_report_data()"/>
+                <t t-set="gt" t-value="result['grand_totals']"/>
+
+                <div class="page"
+                     style="font-family: Arial, sans-serif; font-size: 9px; color: #000;">
+
+                    <!-- ═══════════ HEADER ═══════════ -->
+                    <table style="width: 100%; border: none; margin-bottom: 6px;">
+                        <tr>
+                            <td style="width: 12%; text-align: center;
+                                       vertical-align: middle; border: none; padding: 0;">
+                                <t t-if="settings and settings.logo_primary">
+                                    <img t-att-src="image_data_uri(settings.logo_primary)"
+                                         style="max-height: 55px; max-width: 70px;"
+                                         alt="BPOE"/>
+                                </t>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;
+                                       border: none; padding: 0 8px;">
+                                <div style="font-size: 14px; font-weight: bold;
+                                            color: #003366; letter-spacing: 0.5px;">
+                                    Benevolent and Protective Order of Elks of the U.S.A.
+                                </div>
+                                <div style="font-size: 12px; font-weight: bold; margin-top: 2px;">
+                                    Data Collection Survey — Volunteer, Youth, Charitable
+                                    and Community Service Programs
+                                </div>
+                                <div style="font-size: 10px; margin-top: 4px;">
+                                    <strong>
+                                        <t t-if="settings and settings.name">
+                                            <span t-field="settings.name"/>
+                                        </t>
+                                        <t t-else="">Elks Lodge</t>
+                                        <t t-if="settings and settings.lodge_number">
+                                            &#160;#<span t-field="settings.lodge_number"/>
+                                        </t>
+                                    </strong>
+                                    &#160;·&#160;
+                                    <strong>Period:</strong>
+                                    <t t-out="wizard.date_from"/> through
+                                    <t t-out="wizard.date_to"/>
+                                </div>
+                            </td>
+                            <td style="width: 12%; text-align: center;
+                                       vertical-align: middle; border: none; padding: 0;">
+                                <t t-if="settings and settings.logo_lodge">
+                                    <img t-att-src="image_data_uri(settings.logo_lodge)"
+                                         style="max-height: 55px; max-width: 70px;"
+                                         alt="Lodge Logo"/>
+                                </t>
+                            </td>
+                        </tr>
+                    </table>
+                    <div style="border-top: 2px solid #003366; margin-bottom: 6px;"/>
+
+                    <!-- ═══════════ EMPTY-STATE ═══════════ -->
+                    <t t-if="not result['sections']">
+                        <p style="text-align: center; font-style: italic; color: #666;
+                                  margin: 40px 0;">
+                            No charitable activity found for the selected period
+                            and filters.
+                        </p>
+                    </t>
+
+                    <!-- ═══════════ TABLE ═══════════ -->
+                    <t t-if="result['sections']">
+                        <t t-set="th_style" t-value="'padding: 3px 2px; background: #003366; color: white; font-weight: bold; text-align: center; border: 1px solid #003366; font-size: 8px; line-height: 1.15;'"/>
+                        <t t-set="td_style" t-value="'padding: 2px 3px; border: 1px solid #999; vertical-align: top; font-size: 9px;'"/>
+                        <t t-set="td_num" t-value="'padding: 2px 3px; border: 1px solid #999; vertical-align: top; text-align: right; font-size: 9px;'"/>
+                        <t t-set="sub_style" t-value="'padding: 3px 3px; border: 1px solid #666; background: #eef2f7; font-weight: bold; text-align: right; font-size: 9px;'"/>
+                        <t t-set="sec_style" t-value="'padding: 4px 6px; background: #d6e0ef; font-weight: bold; text-align: left; font-size: 10px; border: 1px solid #003366; color: #003366;'"/>
+
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th t-att-style="th_style" style="width: 8%;">Date</th>
+                                    <th t-att-style="th_style" style="width: 22%;">
+                                        (A) Program<br/>(Category + Name)
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 5%;">
+                                        (B) #<br/>Part.
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 5%;">
+                                        (C) #<br/>Elks
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 5%;">
+                                        (D) #<br/>Helpers
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 7%;">
+                                        (E) Elk<br/>Hours
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 7%;">
+                                        (F) Helper<br/>Hours
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 7%;">
+                                        (G) Elk<br/>Miles
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 7%;">
+                                        (H) Helper<br/>Miles
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 8%;">
+                                        (I) Non-Cash
+                                    </th>
+                                    <th t-att-style="th_style" style="width: 8%;">
+                                        (J) Cash
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                <t t-foreach="result['sections']" t-as="section">
+                                    <!-- SECTION HEADER (Youth, Athletics, etc.) -->
+                                    <tr>
+                                        <td colspan="11" t-att-style="sec_style">
+                                            <t t-out="section['label']"/>
+                                        </td>
+                                    </tr>
+
+                                    <t t-foreach="section['categories']" t-as="cat_data">
+                                        <t t-foreach="cat_data['events']" t-as="event">
+                                            <tr>
+                                                <td t-att-style="td_style">
+                                                    <t t-out="event['event_date']"/>
+                                                </td>
+                                                <td t-att-style="td_style">
+                                                    <strong>
+                                                        [<t t-out="cat_data['category'].code"/>]
+                                                    </strong>
+                                                    <t t-out="event['program_name']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    <t t-out="event['head_count']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    <t t-out="event['num_elks']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    <t t-out="event['num_helpers']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    <t t-out="'%.0f' % event['elks_hours']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    <t t-out="'%.0f' % event['helper_hours']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    <t t-out="'%.0f' % event['elks_miles']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    <t t-out="'%.0f' % event['helper_miles']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    $<t t-out="'%.0f' % event['non_cash']"/>
+                                                </td>
+                                                <td t-att-style="td_num">
+                                                    $<t t-out="'%.0f' % event['cash']"/>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                        <!-- CATEGORY SUBTOTAL -->
+                                        <tr>
+                                            <td colspan="2" t-att-style="sub_style"
+                                                style="text-align: left; padding-left: 20px;">
+                                                Subtotal —
+                                                [<t t-out="cat_data['category'].code"/>]
+                                                <t t-out="cat_data['category'].name
+                                                          if hasattr(cat_data['category'], 'name')
+                                                          else cat_data['category'].display_name"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                <t t-out="cat_data['totals']['head_count']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                <t t-out="cat_data['totals']['num_elks']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                <t t-out="cat_data['totals']['num_helpers']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                <t t-out="'%.0f' % cat_data['totals']['elks_hours']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                <t t-out="'%.0f' % cat_data['totals']['helper_hours']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                <t t-out="'%.0f' % cat_data['totals']['elks_miles']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                <t t-out="'%.0f' % cat_data['totals']['helper_miles']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                $<t t-out="'%.0f' % cat_data['totals']['non_cash']"/>
+                                            </td>
+                                            <td t-att-style="sub_style">
+                                                $<t t-out="'%.0f' % cat_data['totals']['cash']"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </t>
+
+                                <!-- GRAND TOTAL -->
+                                <tr>
+                                    <td colspan="2"
+                                        style="padding: 6px; background: #003366;
+                                               color: white; font-weight: bold;
+                                               text-align: right; border: 2px solid #003366;
+                                               font-size: 11px;">
+                                        GRAND TOTAL
+                                    </td>
+                                    <t t-set="gt_style"
+                                       t-value="'padding: 6px 3px; background: #003366; color: white; font-weight: bold; text-align: right; border: 2px solid #003366; font-size: 10px;'"/>
+                                    <td t-att-style="gt_style">
+                                        <t t-out="gt['head_count']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        <t t-out="gt['num_elks']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        <t t-out="gt['num_helpers']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        <t t-out="'%.0f' % gt['elks_hours']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        <t t-out="'%.0f' % gt['helper_hours']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        <t t-out="'%.0f' % gt['elks_miles']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        <t t-out="'%.0f' % gt['helper_miles']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        $<t t-out="'%.0f' % gt['non_cash']"/>
+                                    </td>
+                                    <td t-att-style="gt_style">
+                                        $<t t-out="'%.0f' % gt['cash']"/>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- ═══════════ SIGNATURE BLOCK ═══════════ -->
+                        <div style="margin-top: 24px; page-break-inside: avoid;">
+                            <table style="width: 100%; border: none;">
+                                <tr>
+                                    <td style="width: 45%; border: none; padding: 0;">
+                                        <div style="border-top: 1px solid #000; padding-top: 3px;">
+                                            <strong>Committee Chair — Signature</strong>
+                                            <span style="float: right; color: #666;">
+                                                Date: ______________
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td style="width: 10%; border: none;">&#160;</td>
+                                    <td style="width: 45%; border: none; padding: 0;">
+                                        <div style="border-top: 1px solid #000; padding-top: 3px;">
+                                            <strong>Lodge Secretary — Signature</strong>
+                                            <span style="float: right; color: #666;">
+                                                Date: ______________
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- ═══════════ FOOTER NOTES ═══════════ -->
+                        <div style="margin-top: 12px; padding: 6px 8px;
+                                    background: #f5f5f5; border: 1px solid #ccc;
+                                    font-size: 8px; color: #444;">
+                            <strong>Column Reference (per BPOE Charity Workbook):</strong>
+                            (A) Program name  ·  (B) People who benefited from the
+                            program  ·  (C) Number of Elks who put on the program  ·
+                            (D) Non-Elk helpers  ·  (E/F) TOTAL volunteer hours
+                            summed across all workers (e.g. 6 Elks × 6 hrs = 36)  ·
+                            (G/H) Round-trip miles totalled the same way  ·
+                            (I) Cash VALUE of in-kind gifts (hall, food, gifts, etc.)  ·
+                            (J) Actual cash / checks / money orders donated.
+                            Only <strong>validated</strong> hours and
+                            <strong>confirmed</strong> contributions are included.
+                        </div>
+                    </t>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <!-- ============================================================
+         Context-aware template — takes docs = selected contributions.
+         Iterates them directly, grouped by (GL Section, Category),
+         with the same 10-column layout and totals as the wizard
+         variant.  No wizard/date-range dependency — this operates
+         on the exact records the Secretary selected.
+         ============================================================ -->
+    <template id="report_bpoe_data_collection_contribs">
+        <t t-call="web.html_container">
+            <t t-set="settings"
+               t-value="docs.env['elks.lodge.settings'].sudo().search([], limit=1)"/>
+
+            <!-- Build a grouped structure from the contribution recordset.
+                 Buckets: {section_label: {category: [contrib, ...]}}
+                 Kept simple on purpose — same table shape as the wizard
+                 template, just fed from a plain recordset. -->
+            <t t-set="GL_SECTION_ORDER" t-value="[
+                ('youth',          'Youth Programs'),
+                ('athletics',      'Youth Athletics'),
+                ('special',        'Special Programs'),
+                ('patriotic',      'Patriotic'),
+                ('veterans',       'Veterans Service'),
+                ('community',      'Community Service'),
+                ('community_hall', 'Community Hall Use'),
+                ('scholarship',    'Elks National Foundation'),
+                ('drug_awareness', 'Drug Awareness'),
+                ('other',          'Other / Not Covered'),
+            ]"/>
+
+            <t t-set="grouped" t-value="{}"/>
+            <t t-foreach="docs" t-as="c">
+                <t t-set="cat" t-value="c.charity_category_id"/>
+                <t t-set="sec" t-value="(cat.gl_section or 'other')"/>
+                <t t-if="sec not in grouped">
+                    <t t-set="_" t-value="grouped.update({sec: {}})"/>
+                </t>
+                <t t-set="cat_key" t-value="cat.id or 0"/>
+                <t t-if="cat_key not in grouped[sec]">
+                    <t t-set="_" t-value="grouped[sec].update({cat_key: {'cat': cat, 'rows': []}})"/>
+                </t>
+                <t t-set="_" t-value="grouped[sec][cat_key]['rows'].append(c)"/>
+            </t>
+
+            <div class="page"
+                 style="font-family: Arial, sans-serif; font-size: 9px; color: #000;">
+
+                <!-- HEADER (same as wizard variant, minus period line) -->
+                <table style="width: 100%; border: none; margin-bottom: 6px;">
+                    <tr>
+                        <td style="width: 12%; text-align: center;
+                                   vertical-align: middle; border: none; padding: 0;">
+                            <t t-if="settings and settings.logo_primary">
+                                <img t-att-src="image_data_uri(settings.logo_primary)"
+                                     style="max-height: 55px; max-width: 70px;"
+                                     alt="BPOE"/>
+                            </t>
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;
+                                   border: none; padding: 0 8px;">
+                            <div style="font-size: 14px; font-weight: bold;
+                                        color: #003366; letter-spacing: 0.5px;">
+                                Benevolent and Protective Order of Elks of the U.S.A.
+                            </div>
+                            <div style="font-size: 12px; font-weight: bold; margin-top: 2px;">
+                                Data Collection Survey — Selected Contributions
+                            </div>
+                            <div style="font-size: 10px; margin-top: 4px;">
+                                <strong>
+                                    <t t-if="settings and settings.name">
+                                        <span t-field="settings.name"/>
+                                    </t>
+                                    <t t-else="">Elks Lodge</t>
+                                    <t t-if="settings and settings.lodge_number">
+                                        &#160;#<span t-field="settings.lodge_number"/>
+                                    </t>
+                                </strong>
+                                &#160;·&#160;
+                                <strong>Records:</strong>
+                                <t t-out="len(docs)"/> contribution(s)
+                            </div>
+                        </td>
+                        <td style="width: 12%; text-align: center;
+                                   vertical-align: middle; border: none; padding: 0;">
+                            <t t-if="settings and settings.logo_lodge">
+                                <img t-att-src="image_data_uri(settings.logo_lodge)"
+                                     style="max-height: 55px; max-width: 70px;"
+                                     alt="Lodge Logo"/>
+                            </t>
+                        </td>
+                    </tr>
+                </table>
+                <div style="border-top: 2px solid #003366; margin-bottom: 6px;"/>
+
+                <t t-set="th_style" t-value="'padding: 3px 2px; background: #003366; color: white; font-weight: bold; text-align: center; border: 1px solid #003366; font-size: 8px; line-height: 1.15;'"/>
+                <t t-set="td_style" t-value="'padding: 2px 3px; border: 1px solid #999; vertical-align: top; font-size: 9px;'"/>
+                <t t-set="td_num" t-value="'padding: 2px 3px; border: 1px solid #999; vertical-align: top; text-align: right; font-size: 9px;'"/>
+                <t t-set="sub_style" t-value="'padding: 3px 3px; border: 1px solid #666; background: #eef2f7; font-weight: bold; text-align: right; font-size: 9px;'"/>
+                <t t-set="sec_style" t-value="'padding: 4px 6px; background: #d6e0ef; font-weight: bold; text-align: left; font-size: 10px; border: 1px solid #003366; color: #003366;'"/>
+                <t t-set="gt_style" t-value="'padding: 6px 3px; background: #003366; color: white; font-weight: bold; text-align: right; border: 2px solid #003366; font-size: 10px;'"/>
+
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th t-att-style="th_style" style="width: 8%;">Date</th>
+                            <th t-att-style="th_style" style="width: 22%;">
+                                (A) Program<br/>(Category + Name)
+                            </th>
+                            <th t-att-style="th_style" style="width: 5%;">
+                                (B) #<br/>Part.
+                            </th>
+                            <th t-att-style="th_style" style="width: 5%;">
+                                (C) #<br/>Elks
+                            </th>
+                            <th t-att-style="th_style" style="width: 5%;">
+                                (D) #<br/>Helpers
+                            </th>
+                            <th t-att-style="th_style" style="width: 7%;">
+                                (E) Elk<br/>Hours
+                            </th>
+                            <th t-att-style="th_style" style="width: 7%;">
+                                (F) Helper<br/>Hours
+                            </th>
+                            <th t-att-style="th_style" style="width: 7%;">
+                                (G) Elk<br/>Miles
+                            </th>
+                            <th t-att-style="th_style" style="width: 7%;">
+                                (H) Helper<br/>Miles
+                            </th>
+                            <th t-att-style="th_style" style="width: 8%;">
+                                (I) Non-Cash
+                            </th>
+                            <th t-att-style="th_style" style="width: 8%;">
+                                (J) Cash
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <t t-set="g_head" t-value="0"/>
+                        <t t-set="g_elks" t-value="0"/>
+                        <t t-set="g_help" t-value="0"/>
+                        <t t-set="g_eh" t-value="0.0"/>
+                        <t t-set="g_hh" t-value="0.0"/>
+                        <t t-set="g_em" t-value="0.0"/>
+                        <t t-set="g_hm" t-value="0.0"/>
+                        <t t-set="g_nc" t-value="0.0"/>
+                        <t t-set="g_ca" t-value="0.0"/>
+
+                        <t t-foreach="GL_SECTION_ORDER" t-as="sec_pair">
+                            <t t-set="sec_key" t-value="sec_pair[0]"/>
+                            <t t-set="sec_label" t-value="sec_pair[1]"/>
+                            <t t-if="sec_key in grouped">
+                                <tr>
+                                    <td colspan="11" t-att-style="sec_style">
+                                        <t t-out="sec_label"/>
+                                    </td>
+                                </tr>
+                                <t t-foreach="grouped[sec_key].values()" t-as="cat_data">
+                                    <t t-set="s_head" t-value="0"/>
+                                    <t t-set="s_elks" t-value="0"/>
+                                    <t t-set="s_help" t-value="0"/>
+                                    <t t-set="s_eh" t-value="0.0"/>
+                                    <t t-set="s_hh" t-value="0.0"/>
+                                    <t t-set="s_em" t-value="0.0"/>
+                                    <t t-set="s_hm" t-value="0.0"/>
+                                    <t t-set="s_nc" t-value="0.0"/>
+                                    <t t-set="s_ca" t-value="0.0"/>
+                                    <t t-foreach="cat_data['rows']" t-as="row">
+                                        <t t-set="s_head" t-value="s_head + (row.head_count or 0)"/>
+                                        <t t-set="s_elks" t-value="s_elks + (row.elks_count or 0)"/>
+                                        <t t-set="s_help" t-value="s_help + (row.helper_count or 0)"/>
+                                        <t t-set="s_eh"  t-value="s_eh + (row.elks_hours or 0.0)"/>
+                                        <t t-set="s_hh"  t-value="s_hh + (row.helper_hours or 0.0)"/>
+                                        <t t-set="s_em"  t-value="s_em + (row.elks_miles or 0.0)"/>
+                                        <t t-set="s_hm"  t-value="s_hm + (row.helper_miles or 0.0)"/>
+                                        <t t-set="s_nc"  t-value="s_nc + (row.non_cash_value or 0.0)"/>
+                                        <t t-set="s_ca"  t-value="s_ca + (row.cash_value or 0.0)"/>
+                                        <tr>
+                                            <td t-att-style="td_style">
+                                                <t t-out="row.contribution_date"/>
+                                            </td>
+                                            <td t-att-style="td_style">
+                                                <strong>
+                                                    [<t t-out="cat_data['cat'].code or '----'"/>]
+                                                </strong>
+                                                <t t-out="row.name"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                <t t-out="row.head_count or 0"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                <t t-out="row.elks_count or 0"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                <t t-out="row.helper_count or 0"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                <t t-out="'%.0f' % (row.elks_hours or 0)"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                <t t-out="'%.0f' % (row.helper_hours or 0)"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                <t t-out="'%.0f' % (row.elks_miles or 0)"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                <t t-out="'%.0f' % (row.helper_miles or 0)"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                $<t t-out="'%.0f' % (row.non_cash_value or 0)"/>
+                                            </td>
+                                            <td t-att-style="td_num">
+                                                $<t t-out="'%.0f' % (row.cash_value or 0)"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                    <tr>
+                                        <td colspan="2" t-att-style="sub_style"
+                                            style="text-align: left; padding-left: 20px;">
+                                            Subtotal —
+                                            [<t t-out="cat_data['cat'].code or '----'"/>]
+                                            <t t-out="cat_data['cat'].name or 'Uncategorized'"/>
+                                        </td>
+                                        <td t-att-style="sub_style"><t t-out="s_head"/></td>
+                                        <td t-att-style="sub_style"><t t-out="s_elks"/></td>
+                                        <td t-att-style="sub_style"><t t-out="s_help"/></td>
+                                        <td t-att-style="sub_style"><t t-out="'%.0f' % s_eh"/></td>
+                                        <td t-att-style="sub_style"><t t-out="'%.0f' % s_hh"/></td>
+                                        <td t-att-style="sub_style"><t t-out="'%.0f' % s_em"/></td>
+                                        <td t-att-style="sub_style"><t t-out="'%.0f' % s_hm"/></td>
+                                        <td t-att-style="sub_style">$<t t-out="'%.0f' % s_nc"/></td>
+                                        <td t-att-style="sub_style">$<t t-out="'%.0f' % s_ca"/></td>
+                                    </tr>
+                                    <t t-set="g_head" t-value="g_head + s_head"/>
+                                    <t t-set="g_elks" t-value="g_elks + s_elks"/>
+                                    <t t-set="g_help" t-value="g_help + s_help"/>
+                                    <t t-set="g_eh" t-value="g_eh + s_eh"/>
+                                    <t t-set="g_hh" t-value="g_hh + s_hh"/>
+                                    <t t-set="g_em" t-value="g_em + s_em"/>
+                                    <t t-set="g_hm" t-value="g_hm + s_hm"/>
+                                    <t t-set="g_nc" t-value="g_nc + s_nc"/>
+                                    <t t-set="g_ca" t-value="g_ca + s_ca"/>
+                                </t>
+                            </t>
+                        </t>
+
+                        <!-- GRAND TOTAL -->
+                        <tr>
+                            <td colspan="2"
+                                style="padding: 6px; background: #003366;
+                                       color: white; font-weight: bold;
+                                       text-align: right; border: 2px solid #003366;
+                                       font-size: 11px;">
+                                GRAND TOTAL
+                            </td>
+                            <td t-att-style="gt_style"><t t-out="g_head"/></td>
+                            <td t-att-style="gt_style"><t t-out="g_elks"/></td>
+                            <td t-att-style="gt_style"><t t-out="g_help"/></td>
+                            <td t-att-style="gt_style"><t t-out="'%.0f' % g_eh"/></td>
+                            <td t-att-style="gt_style"><t t-out="'%.0f' % g_hh"/></td>
+                            <td t-att-style="gt_style"><t t-out="'%.0f' % g_em"/></td>
+                            <td t-att-style="gt_style"><t t-out="'%.0f' % g_hm"/></td>
+                            <td t-att-style="gt_style">$<t t-out="'%.0f' % g_nc"/></td>
+                            <td t-att-style="gt_style">$<t t-out="'%.0f' % g_ca"/></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- SIGNATURE + FOOTER -->
+                <div style="margin-top: 24px; page-break-inside: avoid;">
+                    <table style="width: 100%; border: none;">
+                        <tr>
+                            <td style="width: 45%; border: none; padding: 0;">
+                                <div style="border-top: 1px solid #000; padding-top: 3px;">
+                                    <strong>Committee Chair — Signature</strong>
+                                    <span style="float: right; color: #666;">
+                                        Date: ______________
+                                    </span>
+                                </div>
+                            </td>
+                            <td style="width: 10%; border: none;">&#160;</td>
+                            <td style="width: 45%; border: none; padding: 0;">
+                                <div style="border-top: 1px solid #000; padding-top: 3px;">
+                                    <strong>Lodge Secretary — Signature</strong>
+                                    <span style="float: right; color: #666;">
+                                        Date: ______________
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style="margin-top: 12px; padding: 6px 8px;
+                            background: #f5f5f5; border: 1px solid #ccc;
+                            font-size: 8px; color: #444;">
+                    <strong>Column Reference:</strong>
+                    (A) Program  ·  (B) People who benefited  ·  (C) Elks who put on
+                    the program  ·  (D) Non-Elk helpers  ·  (E/F) TOTAL summed hours  ·
+                    (G/H) Round-trip miles  ·  (I) Cash VALUE of in-kind gifts  ·
+                    (J) Actual cash / checks / money orders.
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

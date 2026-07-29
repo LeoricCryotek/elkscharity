@@ -323,17 +323,18 @@ async function pollAndPush() {
     });
 
     let successes = 0, failures = 0;
+    // Track the most recent error so the popup can show it instead of
+    // just "N failed" with no context.  Cleared on each cycle.
+    let lastError = null;
     for (const it of items) {
+        const label = `#${it.id} ${it.display_name || ""}`;
         try {
             if (dryRun) {
                 // Print the exact payload to devtools so QA can inspect.
                 // Do NOT call mark_pushed — Dry Run must leave the
                 // record in the queue so a real push can happen later.
-                // Prior versions called mark_pushed here which
-                // incorrectly marked 56+ records as Submitted in Odoo
-                // when they never actually reached elks.org.
                 console.log(
-                    "[Elks.org Push · DRY RUN] would submit:",
+                    `[Elks.org Push · DRY RUN] would submit ${label}:`,
                     JSON.stringify(it.payload, null, 2),
                 );
                 successes++;
@@ -342,12 +343,20 @@ async function pollAndPush() {
             }
             const result = await submitOne(formUrl, it.payload);
             if (result.ok) {
+                console.log(
+                    `[Elks.org Push] ✅ ${label} → ${result.confirmation}`,
+                );
                 await odooPost("/elkscharity/ext/v1/mark_pushed", {
                     contribution_id: it.id,
                     confirmation: result.confirmation,
                 });
                 successes++;
             } else {
+                console.error(
+                    `[Elks.org Push] ❌ ${label} — ${result.error}`,
+                    { payload: it.payload, htmlSnippet: (result.html || "").slice(0, 500) },
+                );
+                lastError = { id: it.id, name: it.display_name, message: result.error };
                 await odooPost("/elkscharity/ext/v1/mark_failed", {
                     contribution_id: it.id,
                     error: result.error,
@@ -356,6 +365,10 @@ async function pollAndPush() {
                 failures++;
             }
         } catch (e) {
+            console.error(
+                `[Elks.org Push] 💥 extension exception on ${label}:`, e,
+            );
+            lastError = { id: it.id, name: it.display_name, message: "extension exception: " + e.message };
             try {
                 await odooPost("/elkscharity/ext/v1/mark_failed", {
                     contribution_id: it.id,
@@ -377,10 +390,14 @@ async function pollAndPush() {
             (successes && failures ? ", " : "") +
             (failures ? failures + " failed" : "") +
             (successes || failures ? "." : "") +
+            (failures && lastError
+                ? " Last error: " + (lastError.message || "").slice(0, 140)
+                : "") +
             " Next poll in " + POLL_MINUTES + "m.",
         lastCount: items.length,
         lastSuccess: successes,
         lastFailure: failures,
+        lastError: lastError,
     });
 
     if (successes > 0) {

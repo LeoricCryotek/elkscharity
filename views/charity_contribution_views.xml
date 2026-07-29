@@ -385,6 +385,32 @@ action = {
         </field>
     </record>
 
+    <!-- Failed pushes only.  Same view but hard-filtered to
+         x_elks_org_state='failed', so the Secretary can drill into
+         "what went wrong on that last push cycle".  Extension popup
+         links here from its "Last failure" panel. -->
+    <record id="action_charity_contributions_failed_push"
+            model="ir.actions.act_window">
+        <field name="name">Failed Elks.org Pushes</field>
+        <field name="res_model">elks.charity.contribution</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('x_elks_org_state', '=', 'failed')]</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No failed pushes 🎉
+            </p>
+            <p>
+                Any contribution that errored out during a Chrome
+                extension push lands here.  Open the record and check
+                its chatter — the extension attaches the elks.org
+                response snippet so you can see exactly what elks.org
+                rejected.  Use the bulk "Reset Elks.org Push State"
+                action to retry after fixing the underlying issue.
+            </p>
+        </field>
+    </record>
+
     <!-- Queue of contributions waiting to go out via the Chrome
          extension.  Same view + form as All Contributions, but
          hard-filtered to confirmed rows whose elks.org state is

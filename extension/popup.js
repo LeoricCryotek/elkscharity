@@ -18,8 +18,16 @@ async function loadSettings() {
     );
 }
 
+// Basic HTML-escape so error text can't inject markup.
+function esc(s) {
+    return String(s || "").replace(/[&<>"']/g, (c) => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;",
+          '"': "&quot;", "'": "&#39;" }[c]
+    ));
+}
+
 async function renderStatus() {
-    const {lastStatus} = await loadSettings();
+    const {lastStatus, odooUrl} = await loadSettings();
     const box = $("status");
     box.className = "";
     if (!lastStatus) {
@@ -29,16 +37,39 @@ async function renderStatus() {
         return;
     }
     box.className = lastStatus.state || "";
-    box.innerHTML =
+    let html =
         '<div class="status-state">' +
-            (lastStatus.state || "unknown").replace(/_/g, " ") +
+            esc((lastStatus.state || "unknown").replace(/_/g, " ")) +
         '</div>' +
-        '<div>' + (lastStatus.message || "") + '</div>' +
-        (lastStatus.updated
-            ? '<div class="muted" style="margin-top:4px;">Updated ' +
-              new Date(lastStatus.updated).toLocaleTimeString() +
-              '</div>'
-            : "");
+        '<div>' + esc(lastStatus.message || "") + '</div>';
+    if (lastStatus.updated) {
+        html += '<div class="muted" style="margin-top:4px;">Updated ' +
+                esc(new Date(lastStatus.updated).toLocaleTimeString()) +
+                '</div>';
+    }
+    // If there were failures, expose the last-error record + link to
+    // the Failed Pushes list in Odoo so the Secretary can drill in.
+    if (lastStatus.lastError && (lastStatus.lastFailure || 0) > 0) {
+        const err = lastStatus.lastError;
+        const base = (odooUrl || "").replace(/\/+$/, "");
+        const recordLink = base
+            ? `${base}/odoo/action-elkscharity.action_charity_contributions_failed_push`
+            : "";
+        html += '<div style="margin-top:6px; padding:6px 8px; ' +
+                'background:#fff5f5; border:1px solid #f5c6cb; ' +
+                'border-radius:3px; font-size:11px;">' +
+                '<strong>Last failure:</strong> ' +
+                esc(err.name || ("#" + err.id)) +
+                '<br/><span style="color:#7a1e1e;">' +
+                esc((err.message || "").slice(0, 200)) +
+                '</span>';
+        if (recordLink) {
+            html += `<br/><a href="${esc(recordLink)}" target="_blank" ` +
+                    'style="color:#6a2020;">Open Failed Pushes in Odoo →</a>';
+        }
+        html += '</div>';
+    }
+    box.innerHTML = html;
 }
 
 async function init() {

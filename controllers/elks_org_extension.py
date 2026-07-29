@@ -31,10 +31,14 @@ from odoo.http import request, Response
 _logger = logging.getLogger(__name__)
 
 
-# Maximum contributions returned per poll.  Keeps the response body
-# small and gives the extension a chance to process a batch before
-# the next poll cycle picks up newly-added items.
-PENDING_BATCH_SIZE = 25
+# Maximum contributions returned per poll.  Was 25 in 19.0.7.x; raised
+# to 500 in 19.0.7.9 so a Secretary can drain the whole queue in one
+# Push Now instead of waiting for four poll cycles.  Response body is
+# still small — each entry is ~300 bytes JSON, so 500 rows ≈ 150 KB.
+# If a lodge ever accumulates >500 pending pushes (e.g. after a long
+# outage), the extension still handles it correctly — it just needs
+# multiple polls to drain.
+PENDING_BATCH_SIZE = 500
 
 # CORS headers we tack onto every response.  `*` is fine because
 # auth is via header (X-Elks-Api-Key), not cookie.

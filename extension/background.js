@@ -158,22 +158,55 @@ async function submitOne(formUrl, payload) {
                 ok: false,
                 error: "elks.org session expired — please log in " +
                        "at https://www.elks.org and try again",
-                html: formHtml.slice(0, 4000),
+                html: formHtml.slice(0, 20000),
             };
         }
-        // Extract theUID.  Same regex pattern as the Python client.
-        let uidMatch =
-            formHtml.match(/name=["']theUID["']\s+value=["']([^"']+)["']/i)
-         || formHtml.match(/value=["']([^"']+)["']\s+name=["']theUID["']/i);
-        if (!uidMatch) {
+        // Extract theUID using DOMParser — much more robust than
+        // regex because it doesn't care about attribute order or
+        // extra attributes between name= and value=.  Falls back to
+        // multiple regex patterns if DOMParser somehow misses.
+        let theUID = null;
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(formHtml, "text/html");
+            const uidInput = doc.querySelector('input[name="theUID"]');
+            if (uidInput) {
+                theUID = uidInput.getAttribute("value")
+                      || uidInput.value
+                      || null;
+            }
+        } catch (e) {
+            console.warn("[Elks.org Push] DOMParser failed:", e);
+        }
+        // Regex fallbacks if the DOM query didn't find it.
+        if (!theUID) {
+            const patterns = [
+                /name=["']theUID["'][^>]*?value=["']([^"']+)["']/i,
+                /value=["']([^"']+)["'][^>]*?name=["']theUID["']/i,
+                /theUID['"]?\s*:\s*['"]([^'"]+)['"]/i,   // JS assignment
+                /theUID['"]?\s*=\s*['"]([^'"]+)['"]/i,   // JS/CFML assignment
+            ];
+            for (const rx of patterns) {
+                const m = formHtml.match(rx);
+                if (m) { theUID = m[1]; break; }
+            }
+        }
+        if (!theUID) {
+            console.error(
+                "[Elks.org Push] no theUID in " + formHtml.length +
+                " chars of form HTML. First 500 chars:",
+                formHtml.slice(0, 500),
+            );
             return {
                 ok: false,
-                error: "couldn't find theUID token on form page " +
-                       "— session may not be authenticated",
-                html: formHtml.slice(0, 4000),
+                error: "couldn't find theUID token in " +
+                       formHtml.length + " chars of form page " +
+                       "(URL: " + (formResp.url || "?") + ") — the " +
+                       "elks.org form structure may have changed.  " +
+                       "Open the attached HTML file to check.",
+                html: formHtml.slice(0, 20000),
             };
         }
-        const theUID = uidMatch[1];
 
         // Step 2: POST the form.  Build a URLSearchParams so the
         // Content-Type is application/x-www-form-urlencoded (what

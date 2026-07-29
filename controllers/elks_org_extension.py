@@ -237,7 +237,10 @@ class ElksOrgExtensionController(http.Controller):
             )
         contrib_id = body.get("contribution_id")
         error_text = (body.get("error") or "unknown error")[:1000]
-        html_snippet = (body.get("html_snippet") or "")[:8000]
+        # Was 8000 chars — bumped to 30000 in 19.0.7.10 because
+        # elks.org form pages have ~4-8 KB of nav/header before the
+        # actual form fields.  8000 was cutting off theUID.
+        html_snippet = (body.get("html_snippet") or "")[:30000]
         if not contrib_id:
             return _json_response(
                 {"error": "missing_contribution_id"}, status=400,

@@ -364,6 +364,66 @@ async function submitOne(formUrl, payload) {
     } finally { clearTimeout(to); }
 }
 
+// ── delete-button discovery ─────────────────────────────────────────
+// elks.org's edit page renders the Delete button in one of several
+// ways depending on the ColdFusion page version:
+//   1. <input type="submit" name="deleteRecord" value="Delete This Program">
+//   2. <input type="button" name="deleteRecord" value="Delete This Program"
+//      onclick="if (confirm(...)) form.submit()">
+//   3. <button type="submit" name="deleteRecord" value="Delete…">Delete</button>
+//   4. <a href="...?ID=N&deleteRecord=Y" ...>Delete</a>  (rare)
+// Try each pattern in turn; return {name, value} for the first match.
+function findDeleteField(html) {
+    // Pattern 1 & 2: <input> with type=submit|button, name+value both
+    // present, value containing "Delete" (case-insensitive).
+    const inputPatterns = [
+        // name before value
+        /<input[^>]*\btype=["'](?:submit|button)["'][^>]*\bname=["']([^"']+)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["']/i,
+        // value before name
+        /<input[^>]*\btype=["'](?:submit|button)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\bname=["']([^"']+)["']/i,
+        // name before type, value before name (any ordering)
+        /<input[^>]*\bname=["']([^"']+)["'][^>]*\btype=["'](?:submit|button)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["']/i,
+        /<input[^>]*\bname=["']([^"']+)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\btype=["'](?:submit|button)["']/i,
+        /<input[^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\bname=["']([^"']+)["'][^>]*\btype=["'](?:submit|button)["']/i,
+        /<input[^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\btype=["'](?:submit|button)["'][^>]*\bname=["']([^"']+)["']/i,
+        // fallback — no type attr at all (defaults to type=submit
+        // in HTML5 for input inside a form)
+        /<input[^>]*\bname=["']([^"']+)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["']/i,
+        /<input[^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\bname=["']([^"']+)["']/i,
+    ];
+    for (let i = 0; i < inputPatterns.length; i++) {
+        const m = html.match(inputPatterns[i]);
+        if (!m) continue;
+        // Figure out which capture group is name vs value: whichever
+        // contains "delete" is the value.
+        const [, a, b] = m;
+        if (/[Dd]elete/.test(a)) return {name: b, value: a};
+        return {name: a, value: b};
+    }
+    // Pattern 3: <button ...>Delete...</button>
+    const btn = html.match(
+        /<button[^>]*\bname=["']([^"']+)["'][^>]*value=["']([^"']*)["'][^>]*>[^<]*[Dd]elete[^<]*<\/button>/i
+    ) || html.match(
+        /<button[^>]*\bvalue=["']([^"']*)["'][^>]*name=["']([^"']+)["'][^>]*>[^<]*[Dd]elete[^<]*<\/button>/i
+    ) || html.match(
+        /<button[^>]*\bname=["']([^"']+)["'][^>]*>[^<]*[Dd]elete[^<]*<\/button>/i
+    );
+    if (btn) {
+        if (btn.length >= 3) {
+            const [, a, b] = btn;
+            if (/[Dd]elete/.test(a)) return {name: b, value: a};
+            return {name: a, value: b || "Delete"};
+        }
+        return {name: btn[1], value: "Delete"};
+    }
+    // Pattern 4: <a href="?...deleteRecord=..."> — extract from URL.
+    const link = html.match(
+        /<a[^>]*href=["'][^"']*[?&](delete[Rr]ecord)=([^"'&]*)/i
+    );
+    if (link) return {name: link[1], value: decodeURIComponent(link[2])};
+    return null;
+}
+
 // ── purge duplicates on elks.org ───────────────────────────────────
 // One-shot cleanup for after a false-negative retry storm left many
 // duplicate records on elks.org.  Groups records by their rendered
@@ -486,6 +546,12 @@ async function purgeDuplicates() {
     // edit page.  Cache it — every record uses the same edit template.
     let cachedDelFieldName = null;
     let cachedDelFieldValue = null;
+    // If discovery fails, capture ONE edit-page sample to render in
+    // the popup so the user can share it without opening
+    // chrome://extensions → Inspect service worker.
+    let editHtmlSampleDumped = false;
+    let firstEditHtmlSample = null;
+    let firstEditHtmlSampleId = null;
 
     for (let i = 0; i < toDelete.length; i++) {
         const rec = toDelete[i];
@@ -521,37 +587,45 @@ async function purgeDuplicates() {
                 continue;
             }
             const editHtml = await editResp.text();
-            // Look for a submit button whose value contains "Delete".
-            // Elks.org's form uses <input type="submit" name="X"
-            // value="Delete This Program"> or similar wording.
+            // Discover the delete-button field on the FIRST edit page
+            // ONLY (cache it — same template for every record).
+            //
+            // v1.4.1: elks.org may use <input type="button" ...
+            // onclick="if(confirm(...)) form.submit()"> instead of
+            // type="submit", so match any <input>/<button> whose
+            // value or text contains "Delete".  Also captures a
+            // sample of the edit HTML into purgeStatus so the user
+            // can view/copy it from the popup if discovery still fails.
             if (!cachedDelFieldName) {
-                const delBtn = editHtml.match(
-                    /<input[^>]*type=["']submit["'][^>]*name=["']([^"']+)["'][^>]*value=["']([^"']*[Dd]elete[^"']*)["']/i
-                ) || editHtml.match(
-                    /<input[^>]*name=["']([^"']+)["'][^>]*type=["']submit["'][^>]*value=["']([^"']*[Dd]elete[^"']*)["']/i
-                ) || editHtml.match(
-                    /<input[^>]*value=["']([^"']*[Dd]elete[^"']*)["'][^>]*name=["']([^"']+)["']/i
-                );
-                if (!delBtn) {
+                cachedDelFieldName = findDeleteField(editHtml);
+                if (!cachedDelFieldName) {
+                    // Dump first HTML sample to purgeStatus so the
+                    // user can share it without cracking open
+                    // chrome://extensions.  Only dump ONCE (guarded
+                    // by editHtmlSampleDumped flag below).
+                    if (!editHtmlSampleDumped) {
+                        editHtmlSampleDumped = true;
+                        const sample = editHtml
+                            .replace(/<script[\s\S]*?<\/script>/gi, "")
+                            .replace(/<style[\s\S]*?<\/style>/gi, "")
+                            .substring(0, 5000);
+                        console.warn(
+                            `[Elks.org Purge] Edit page for ID=${rec.id} ` +
+                            `had no Delete button.  HTML head:\n` +
+                            editHtml.substring(0, 3000)
+                        );
+                        // Stash the sample so the popup can render it.
+                        firstEditHtmlSample = sample;
+                        firstEditHtmlSampleId = rec.id;
+                    }
                     errors.push(
-                        `ID ${rec.id}: no Delete button found on edit page ` +
-                        `— dumping first 2000 chars of edit HTML to console`
-                    );
-                    console.warn(
-                        `[Elks.org Purge] Edit page for ID=${rec.id} had ` +
-                        `no Delete button.  HTML head:\n` +
-                        editHtml.substring(0, 2000)
+                        `ID ${rec.id}: no Delete button found on edit ` +
+                        `page — see HTML sample in popup below`
                     );
                     continue;
                 }
-                // Handle both regex orderings.
-                if (/[Dd]elete/.test(delBtn[1])) {
-                    cachedDelFieldValue = delBtn[1];
-                    cachedDelFieldName = delBtn[2];
-                } else {
-                    cachedDelFieldName = delBtn[1];
-                    cachedDelFieldValue = delBtn[2];
-                }
+                cachedDelFieldValue = cachedDelFieldName.value;
+                cachedDelFieldName = cachedDelFieldName.name;
                 console.log(
                     `[Elks.org Purge] Discovered delete field: ` +
                     `name="${cachedDelFieldName}" ` +
@@ -669,6 +743,11 @@ async function purgeDuplicates() {
             errors,
             delFieldName: cachedDelFieldName,
             delFieldValue: cachedDelFieldValue,
+            // If discovery failed, this sample lets the user copy
+            // the edit-page HTML from the popup and paste it here so
+            // we can adjust the regex without a code-side round trip.
+            editHtmlSample: firstEditHtmlSample,
+            editHtmlSampleId: firstEditHtmlSampleId,
         },
     });
     console.log(
@@ -684,6 +763,10 @@ async function purgeDuplicates() {
         deleted: verified,
         stillPresent,
         errors,
+        delFieldName: cachedDelFieldName,
+        delFieldValue: cachedDelFieldValue,
+        editHtmlSample: firstEditHtmlSample,
+        editHtmlSampleId: firstEditHtmlSampleId,
     };
 }
 
@@ -987,6 +1070,11 @@ async function syncNow(opts) {
         verified: purgeResult.deleted || 0,
         stillPresent: purgeResult.stillPresent || 0,
         purgeErrors: purgeResult.errors || [],
+        // Delete-button discovery diagnostics for the popup UI.
+        delFieldName: purgeResult.delFieldName || null,
+        delFieldValue: purgeResult.delFieldValue || null,
+        editHtmlSample: purgeResult.editHtmlSample || null,
+        editHtmlSampleId: purgeResult.editHtmlSampleId || null,
     };
 
     await setSyncProgress({

@@ -109,7 +109,15 @@ async function renderPurgeProgress() {
                 purgeRow("Still present", r.stillPresent,
                     r.stillPresent > 0 ? "#7a1e1e" : "#0a5d0a") +
             '</table>' +
-            warn + errBlock;
+            warn + errBlock +
+            // Include the edit-page HTML sample if discovery failed
+            // during Sync's purge phase too.
+            (r.editHtmlSample && !r.delFieldName
+                ? renderEditHtmlSample({
+                    editHtmlSample: r.editHtmlSample,
+                    editHtmlSampleId: r.editHtmlSampleId,
+                })
+                : "");
         const dismiss = document.getElementById("purge-dismiss");
         if (dismiss) {
             dismiss.addEventListener("click", () => {
@@ -160,6 +168,10 @@ async function renderPurgeProgress() {
                 'color:#666;">Delete field discovered: ' +
                 '<code>' + esc(r.delFieldName) + '=' +
                 esc(r.delFieldValue || "") + '</code></div>';
+        } else if (r.editHtmlSample) {
+            // Discovery failed for every record — render the sample
+            // so the user can copy + share it.
+            delField = renderEditHtmlSample(r);
         }
         box.innerHTML =
             '<div style="display:flex; justify-content:space-between; ' +
@@ -217,6 +229,54 @@ async function renderPurgeProgress() {
         esc(purgeStatus.message || "") +
         '</div>' +
         bar;
+}
+
+// Renders the edit-page HTML sample panel used when delete-button
+// discovery failed for every record.  Includes a Copy-to-clipboard
+// button so the user can paste the markup into a support ticket /
+// chat without needing to open the service-worker devtools.
+function renderEditHtmlSample(r) {
+    const sampleId = "edit-html-sample-" + Date.now();
+    // Note: the "click" wiring happens in setTimeout after this HTML
+    // is injected — we can't attach listeners in the returned string.
+    setTimeout(() => {
+        const btn = document.getElementById(sampleId + "-copy");
+        if (btn) {
+            btn.addEventListener("click", async () => {
+                try {
+                    await navigator.clipboard.writeText(r.editHtmlSample);
+                    btn.textContent = "Copied ✓";
+                    setTimeout(() => {
+                        btn.textContent = "Copy edit-page HTML";
+                    }, 2000);
+                } catch (e) {
+                    btn.textContent = "Copy failed — select manually";
+                }
+            });
+        }
+    }, 50);
+    return (
+        '<div style="margin-top:8px; padding:6px 8px; ' +
+        'background:#fff8e1; border:1px solid #ffe082; ' +
+        'border-radius:3px; font-size:11px;">' +
+        '<strong>Delete-button discovery failed.</strong> ' +
+        'The edit page for ID ' + esc(String(r.editHtmlSampleId || "?")) +
+        ' had no matching button pattern.  Copy the HTML sample below ' +
+        'and share it so the regex can be updated:<br/>' +
+        '<button id="' + sampleId + '-copy" style="margin-top:4px; ' +
+        'padding:3px 8px; font-size:11px; cursor:pointer;">' +
+        'Copy edit-page HTML</button>' +
+        '<pre style="margin-top:4px; max-height:180px; ' +
+        'overflow:auto; padding:6px; background:#fff; ' +
+        'border:1px solid #ddd; border-radius:2px; font-size:10px; ' +
+        'font-family:monospace; white-space:pre-wrap; ' +
+        'word-break:break-all;">' +
+        esc(r.editHtmlSample.substring(0, 3000)) +
+        (r.editHtmlSample.length > 3000
+            ? "\n\n… truncated at 3000 chars (full 5000 in clipboard)"
+            : "") +
+        '</pre></div>'
+    );
 }
 
 // Small helper for the purge-complete results table row.

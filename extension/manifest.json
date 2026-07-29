@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Elks.org Charity Push",
   "short_name": "Elks.org Push",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Submits Odoo-validated charity contributions to elks.org Local Lodge Reporting using your active browser session. Companion to the elkscharity Odoo module — works for any Lodge that runs it.",
   "author": "Danny Santiago",
   "icons": {

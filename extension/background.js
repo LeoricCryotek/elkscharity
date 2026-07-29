@@ -390,35 +390,39 @@ async function purgeDuplicates() {
         throw new Error("elks.org session expired — log in first");
     }
 
-    // Parse the landing page.  Each row is inside a form that
-    // POSTs to /grandlodge/charity/local.cfm with a hidden ID
-    // input and editRecord submit button.  Group siblings.
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(landingHtml, "text/html");
-
-    // Every existing record renders an <input name="ID" value="N">
-    // followed by an <input name="editRecord"> in the same form.
-    // Pull the IDs + surrounding row context for grouping.
+    // Regex-parse (DOMParser isn't available in MV3 service workers).
+    // Each record on the landing page renders as a <tr> containing
+    // a form with <input name="ID" value="N">.  Iterate every <tr>,
+    // pull the record ID, and build a fingerprint from the row's
+    // text content for grouping duplicates.
     const records = [];
-    for (const form of doc.querySelectorAll("form")) {
-        const idInput = form.querySelector('input[name="ID"]');
-        const editInput = form.querySelector('input[name="editRecord"]');
-        if (!idInput || !editInput) continue;
-        const rid = idInput.value;
+    const trRegex = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+    let m;
+    while ((m = trRegex.exec(landingHtml)) !== null) {
+        const rowHtml = m[1];
+        const idMatch = rowHtml.match(
+            /name=["']ID["']\s+value=["'](\d+)["']/i
+        );
+        if (!idMatch) continue;
+        const rid = idMatch[1];
         if (!rid || rid === "-1") continue;
-        // Pull the row's text so we can group by
-        // (programDate + programName) for dedupe grouping.
-        // The parent <tr> has the date/name cells.
-        let rowText = "";
-        let node = form.parentElement;
-        while (node && node.tagName !== "TR") node = node.parentElement;
-        if (node) rowText = (node.textContent || "").trim().replace(/\s+/g, " ");
+        // Verify it's an EDIT form (not a "Create New" form which
+        // also has an ID input with value=-1 but a different button).
+        if (!/name=["']editRecord["']/i.test(rowHtml)) continue;
+        // Strip HTML tags to build a clean text fingerprint.
+        const rowText = rowHtml
+            .replace(/<script[\s\S]*?<\/script>/gi, "")
+            .replace(/<style[\s\S]*?<\/style>/gi, "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&nbsp;/gi, " ")
+            .replace(/&amp;/gi, "&")
+            .replace(/\s+/g, " ")
+            .trim();
         records.push({ id: rid, rowText });
     }
 
-    // Group by rowText (date + program name + counts — a full-row
-    // fingerprint that will match exact duplicates from the false-
-    // negative retry storm).
+    // Group by rowText — an exact-content fingerprint that catches
+    // the retry-storm duplicates (same date, program, counts, $).
     const groups = new Map();
     for (const rec of records) {
         const key = rec.rowText;

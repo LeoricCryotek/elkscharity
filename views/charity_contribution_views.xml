@@ -175,14 +175,41 @@
                 <field name="contribution_date"/>
                 <field name="name"/>
                 <field name="task_id"/>
+                <field name="charity_category_id" string="GL Category"
+                       optional="hide"/>
+                <field name="charity_section" string="GL Section"
+                       optional="hide"/>
                 <field name="contribution_type"/>
                 <field name="recipient_org" optional="show"/>
                 <field name="cash_value" sum="Cash Total"/>
                 <field name="non_cash_value" sum="Non-Cash Total"/>
-                <field name="head_count" sum="Head Count" optional="show"/>
-                <field name="elks_count" sum="Elks" optional="show"/>
-                <field name="helper_count" sum="Helpers" optional="show"/>
+                <field name="head_count" sum="Head Count" optional="show"
+                       string="(B) People"/>
+                <field name="elks_count" sum="Elks" optional="show"
+                       string="(C) # Elks"/>
+                <field name="helper_count" sum="Helpers" optional="show"
+                       string="(D) # Helpers"/>
+                <field name="elks_hours" widget="float_time"
+                       sum="Elk Hours" optional="show"
+                       string="(E) Elk Hours"/>
+                <field name="helper_hours" widget="float_time"
+                       sum="Helper Hours" optional="show"
+                       string="(F) Helper Hours"/>
+                <field name="elks_miles" sum="Elk Miles" optional="hide"
+                       string="(G) Elk Miles"/>
+                <field name="helper_miles" sum="Helper Miles" optional="hide"
+                       string="(H) Helper Miles"/>
+                <field name="lodge_year" optional="hide"/>
+                <field name="x_source" widget="badge" string="Source"
+                       optional="hide"
+                       decoration-info="x_source == 'attendance'"
+                       decoration-primary="x_source == 'quick_entry'"
+                       decoration-muted="x_source == 'manual'"/>
+                <field name="submitted_by" optional="hide"/>
+                <field name="confirmed_by" optional="hide"/>
+                <field name="confirmed_date" optional="hide"/>
                 <field name="is_recurring" widget="boolean" optional="hide"/>
+                <field name="next_generation_date" optional="hide"/>
                 <field name="state" widget="badge"
                        decoration-info="state == 'draft'"
                        decoration-success="state == 'confirmed'"
@@ -194,6 +221,12 @@
                        decoration-muted="x_elks_org_state == 'skipped'"
                        decoration-danger="x_elks_org_state == 'failed'"
                        optional="show"/>
+                <field name="x_elks_org_pushed_on" optional="hide"
+                       string="Pushed On"/>
+                <field name="x_elks_org_confirmation" optional="hide"
+                       string="Elks.org Confirmation"/>
+                <field name="x_elks_org_last_error" optional="hide"
+                       string="Last Push Error"/>
             </list>
         </field>
     </record>

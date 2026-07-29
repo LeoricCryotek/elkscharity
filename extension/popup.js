@@ -79,9 +79,20 @@ async function refreshPendingCount() {
             return;
         }
         const body = await resp.json();
-        const n = (body && body.count) || 0;
-        $("pending-count").textContent =
-            n === 0 ? "0 (queue empty)" : String(n);
+        // total_pending is the true queue depth across all rows.
+        // count is the per-poll batch size cap (25) — shown in
+        // parens if it's smaller than the total so the user knows
+        // multiple polls will process everything.
+        const total = (body && body.total_pending) ?? (body && body.count) ?? 0;
+        const batch = (body && body.count) || 0;
+        if (total === 0) {
+            $("pending-count").textContent = "0 (queue empty)";
+        } else if (batch < total) {
+            $("pending-count").textContent =
+                total + " total (" + batch + " per poll)";
+        } else {
+            $("pending-count").textContent = String(total);
+        }
     } catch (e) {
         $("pending-count").textContent = "(couldn't reach Odoo)";
     }

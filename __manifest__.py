@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Elks Charity — Volunteer Hours, Activities & Grand Lodge Report",
-    "version": "19.0.7.4",
+    "version": "19.0.7.5",
     "category": "Productivity",
     "summary": "Grand Lodge Charity Workbook in Odoo. Auto-generates "
                "elks.org submissions from attendance + Quick Entry, "

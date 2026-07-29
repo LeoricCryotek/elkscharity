@@ -131,6 +131,10 @@ class ElksOrgExtensionController(http.Controller):
         # Secretaries see everything.
         if not user.has_group("elkscharity.group_elkscharity_secretary"):
             domain += [("create_uid", "=", user.id)]
+        # Total pending across ALL rows (not just this batch) — the
+        # extension popup uses this to show the real queue depth
+        # instead of the per-poll batch size.
+        total_pending = Contrib.search_count(domain)
         contribs = Contrib.search(domain, limit=PENDING_BATCH_SIZE)
         items = []
         for c in contribs:
@@ -151,6 +155,7 @@ class ElksOrgExtensionController(http.Controller):
         return _json_response({
             "ok": True,
             "count": len(items),
+            "total_pending": total_pending,
             "items": items,
             "form_url": (
                 env["ir.config_parameter"].sudo().get_param(

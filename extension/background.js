@@ -130,29 +130,77 @@ async function elksSessionAlive() {
     } finally { clearTimeout(to); }
 }
 
+// Helper: extract the theUID token from an elks.org form HTML.
+// Returns the token string or null.  DOMParser first, then regex
+// fallbacks for weird attribute orderings.
+function extractTheUID(formHtml) {
+    let theUID = null;
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(formHtml, "text/html");
+        const uidInput = doc.querySelector('input[name="theUID"]');
+        if (uidInput) {
+            theUID = uidInput.getAttribute("value")
+                  || uidInput.value
+                  || null;
+        }
+    } catch (e) {
+        console.warn("[Elks.org Push] DOMParser failed:", e);
+    }
+    if (!theUID) {
+        const patterns = [
+            /name=["']theUID["'][^>]*?value=["']([^"']+)["']/i,
+            /value=["']([^"']+)["'][^>]*?name=["']theUID["']/i,
+            /theUID['"]?\s*:\s*['"]([^'"]+)['"]/i,
+            /theUID['"]?\s*=\s*['"]([^'"]+)['"]/i,
+        ];
+        for (const rx of patterns) {
+            const m = formHtml.match(rx);
+            if (m) { theUID = m[1]; break; }
+        }
+    }
+    return theUID;
+}
+
 // ── one contribution submission ────────────────────────────────────
-// GET the form (scrape theUID), then POST the payload.  Same
-// two-step dance the Python client does.
+// elks.org's flow is TWO POSTs to /grandlodge/charity/local.cfm:
+//   1. POST ID=-1&editRecord=Create+New+Charitable+Event
+//      → server responds with the actual form HTML that includes
+//        the theUID token (a per-request CSRF-style value)
+//   2. POST all the field data + theUID + submitProgram
+//      → server accepts + returns the "Days Since Last Charitable
+//        Event" page with a 0 counter
+//
+// Previous versions did GET → find theUID → POST.  The GET landed
+// on the LANDING page which only has a "Create New" button and no
+// theUID field, so every submission failed.  Fixed in extension 1.2.6.
 async function submitOne(formUrl, payload) {
     const ctl = new AbortController();
     const to = setTimeout(() => ctl.abort(), SUBMIT_TIMEOUT);
     try {
-        // Step 1: fetch the form page to get a fresh theUID token.
+        // Step 1: trigger the "Create New Charitable Event" form
+        // so the server hands us back the full form + theUID.
+        const triggerBody = new URLSearchParams();
+        triggerBody.set("ID", "-1");
+        triggerBody.set("editRecord", "Create New Charitable Event");
         const formResp = await fetch(formUrl, {
-            method: "GET",
+            method: "POST",
             credentials: "include",
             redirect: "follow",
+            body: triggerBody.toString(),
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
             signal: ctl.signal,
         });
         if (formResp.status !== 200) {
             return {
                 ok: false,
-                error: "form fetch HTTP " + formResp.status,
+                error: "form trigger HTTP " + formResp.status,
                 html: "",
             };
         }
         const formHtml = await formResp.text();
-        // If elks.org redirected us to login, no session.
         if (/elkslogin\.cfm/i.test(formResp.url || "")) {
             return {
                 ok: false,
@@ -161,36 +209,7 @@ async function submitOne(formUrl, payload) {
                 html: formHtml.slice(0, 20000),
             };
         }
-        // Extract theUID using DOMParser — much more robust than
-        // regex because it doesn't care about attribute order or
-        // extra attributes between name= and value=.  Falls back to
-        // multiple regex patterns if DOMParser somehow misses.
-        let theUID = null;
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(formHtml, "text/html");
-            const uidInput = doc.querySelector('input[name="theUID"]');
-            if (uidInput) {
-                theUID = uidInput.getAttribute("value")
-                      || uidInput.value
-                      || null;
-            }
-        } catch (e) {
-            console.warn("[Elks.org Push] DOMParser failed:", e);
-        }
-        // Regex fallbacks if the DOM query didn't find it.
-        if (!theUID) {
-            const patterns = [
-                /name=["']theUID["'][^>]*?value=["']([^"']+)["']/i,
-                /value=["']([^"']+)["'][^>]*?name=["']theUID["']/i,
-                /theUID['"]?\s*:\s*['"]([^'"]+)['"]/i,   // JS assignment
-                /theUID['"]?\s*=\s*['"]([^'"]+)['"]/i,   // JS/CFML assignment
-            ];
-            for (const rx of patterns) {
-                const m = formHtml.match(rx);
-                if (m) { theUID = m[1]; break; }
-            }
-        }
+        const theUID = extractTheUID(formHtml);
         if (!theUID) {
             console.error(
                 "[Elks.org Push] no theUID in " + formHtml.length +

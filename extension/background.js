@@ -325,22 +325,22 @@ async function pollAndPush() {
     let successes = 0, failures = 0;
     for (const it of items) {
         try {
-            let result;
             if (dryRun) {
                 // Print the exact payload to devtools so QA can inspect.
+                // Do NOT call mark_pushed — Dry Run must leave the
+                // record in the queue so a real push can happen later.
+                // Prior versions called mark_pushed here which
+                // incorrectly marked 56+ records as Submitted in Odoo
+                // when they never actually reached elks.org.
                 console.log(
                     "[Elks.org Push · DRY RUN] would submit:",
                     JSON.stringify(it.payload, null, 2),
                 );
-                result = {
-                    ok: true,
-                    confirmation:
-                        "DRY RUN — payload logged to browser console, " +
-                        "NOT submitted to elks.org",
-                };
-            } else {
-                result = await submitOne(formUrl, it.payload);
+                successes++;
+                await new Promise((r) => setTimeout(r, 100));
+                continue;
             }
+            const result = await submitOne(formUrl, it.payload);
             if (result.ok) {
                 await odooPost("/elkscharity/ext/v1/mark_pushed", {
                     contribution_id: it.id,

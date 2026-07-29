@@ -275,6 +275,83 @@
     <!-- Bulk-push action removed 19.0.5.0 — the Chrome extension
          handles bulk automatically by polling for confirmed rows. -->
 
+    <!-- Bulk "Reset to Draft".  Flips confirmed rows back to
+         state='draft' so they leave the elks.org push queue (which
+         only picks up confirmed) and can be edited / cleaned up
+         before being re-confirmed.  Skips already-draft rows and
+         cancelled rows.  Uses the existing action_reset_draft
+         method on each record so the audit fields (confirmed_by,
+         confirmed_date) get cleared consistently. -->
+    <record id="action_bulk_reset_to_draft"
+            model="ir.actions.server">
+        <field name="name">Reset to Draft (Bulk)</field>
+        <field name="model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+eligible = records.filtered(lambda r: r.state == 'confirmed')
+eligible.action_reset_draft()
+for rec in eligible:
+    rec.message_post(
+        body='&lt;strong&gt;Reset to Draft&lt;/strong&gt; via bulk action by %s.' % env.user.name,
+        subtype_xmlid='mail.mt_note',
+    )
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Reset to Draft',
+        'message': '%d contribution(s) reset to Draft.  They are no longer in the elks.org push queue.' % len(eligible),
+        'type': 'success',
+        'sticky': False,
+    },
+}
+        </field>
+    </record>
+
+    <!-- Bulk-reset elks.org state.  Select rows in the Contributions
+         list, then Actions ▸ "Reset Elks.org Push State (Bulk)".
+         Flips x_elks_org_state back to 'not_pushed' so the extension
+         picks them up on next poll.  Handy after a Dry-Run run
+         accidentally marked things Submitted, or when elks.org
+         rejected a batch and you want a clean retry.  Skips rows
+         that are already 'not_pushed'. -->
+    <record id="action_bulk_reset_elks_org_state"
+            model="ir.actions.server">
+        <field name="name">Reset Elks.org Push State (Bulk)</field>
+        <field name="model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+eligible = records.filtered(lambda r: r.x_elks_org_state != 'not_pushed')
+eligible.write({
+    'x_elks_org_state': 'not_pushed',
+    'x_elks_org_last_error': False,
+    'x_elks_org_retry_count': 0,
+    'x_elks_org_confirmation': False,
+    'x_elks_org_pushed_on': False,
+    'x_elks_org_pushed_by': False,
+})
+for rec in eligible:
+    rec.message_post(
+        body='&lt;strong&gt;Elks.org push state reset&lt;/strong&gt; via bulk action by %s.' % env.user.name,
+        subtype_xmlid='mail.mt_note',
+    )
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Reset Elks.org Push State',
+        'message': '%d contribution(s) reset to Not Submitted.  Extension will re-push on next poll.' % len(eligible),
+        'type': 'success',
+        'sticky': False,
+    },
+}
+        </field>
+    </record>
+
     <record id="action_charity_contributions" model="ir.actions.act_window">
         <field name="name">Charity Contributions</field>
         <field name="res_model">elks.charity.contribution</field>

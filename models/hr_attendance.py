@@ -516,6 +516,53 @@ class HrAttendance(models.Model):
                     "confirmed_date": fields.Datetime.now(),
                 })
 
+    @api.model
+    def rebuild_attendance_contributions_button(self):
+        """On-demand backfill.  Wraps _ensure_attendance_contribution
+        for every validated charity attendance in the DB, then shows
+        a notification with the before/after counts.  Handy when the
+        version-based post-migrate didn't fire (Odoo already saw the
+        target version), or after importing historical attendance
+        from an outside system.
+        """
+        Contrib = self.env["elks.charity.contribution"].sudo()
+        before = Contrib.search_count([("x_source", "=", "attendance")])
+
+        historical = self.sudo().search([
+            ("x_charity_task_id", "!=", False),
+            ("x_validated", "=", True),
+            ("check_out", "!=", False),
+        ])
+        if historical:
+            historical._ensure_attendance_contribution()
+
+        after = Contrib.search_count([("x_source", "=", "attendance")])
+        delta = after - before
+        _logger.info(
+            "elkscharity: rebuild_attendance_contributions_button — "
+            "scanned %d attendance row(s), %d attendance-sourced "
+            "contribution(s) after (delta %+d).",
+            len(historical), after, delta,
+        )
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Rebuild Attendance Contributions"),
+                "message": _(
+                    "Scanned %(n)d validated charity attendance "
+                    "row(s).  Attendance-sourced contributions: "
+                    "%(before)d before → %(after)d after "
+                    "(%(delta)+d new/updated).  Refresh 'Pending "
+                    "Elks.org Push' to see them.",
+                    n=len(historical), before=before,
+                    after=after, delta=delta,
+                ),
+                "sticky": True,
+                "type": "success" if delta >= 0 else "warning",
+            },
+        }
+
     def unlink(self):
         tasks = self.mapped('x_charity_task_id')
         res = super().unlink()

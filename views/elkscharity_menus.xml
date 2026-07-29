@@ -152,4 +152,24 @@
               parent="menu_elkscharity_config"
               action="action_elks_org_setup_wizard"
               sequence="80"/>
+
+    <!-- Manual "Rebuild Attendance Contributions" trigger.  Same
+         backfill that runs in the 19.0.7.1 post-migrate, but on
+         demand from the Configuration menu.  Useful when the
+         migration didn't fire (e.g., upgrading module while Odoo
+         thought the version was already applied) or after bulk
+         importing historical attendance. -->
+    <record id="action_rebuild_attendance_contributions"
+            model="ir.actions.server">
+        <field name="name">Rebuild Attendance Contributions</field>
+        <field name="model_id" ref="hr_attendance.model_hr_attendance"/>
+        <field name="state">code</field>
+        <field name="code">action = env['hr.attendance'].sudo().rebuild_attendance_contributions_button()</field>
+    </record>
+
+    <menuitem id="menu_elkscharity_rebuild_att_contribs"
+              name="Rebuild Attendance Contributions"
+              parent="menu_elkscharity_config"
+              action="action_rebuild_attendance_contributions"
+              sequence="90"/>
 </odoo>

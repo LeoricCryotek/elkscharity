@@ -1,37 +1,74 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Elks Charity — Volunteer Hours, Activities & Grand Lodge Report",
-    "version": "19.0.7.1",
+    "version": "19.0.7.2",
     "category": "Productivity",
-    "summary": "Track volunteer hours and charitable activities per "
-               "Grand Lodge categories (1001–9999). Uses Odoo Projects "
-               "and Timesheets, with annual workbook PDF output.",
+    "summary": "Grand Lodge Charity Workbook in Odoo. Auto-generates "
+               "elks.org submissions from attendance + Quick Entry, "
+               "pushes them to elks.org via companion Chrome extension, "
+               "prints the paper Data Collection Survey (Columns A–J).",
     "description": """
-Elks Charity Workbook Module
-=============================
+Elks Charity Workbook Module (v19.0.7.x)
+=========================================
 
-Implements the Grand Lodge Charity Records Workbook (Code 511100) in
-Odoo using the Project, Timesheets, and Calendar apps.
+Full BPOE Grand Lodge Charity Records Workbook (Code 511100) in Odoo,
+with automated pipeline from clock-in to elks.org submission.
 
-Architecture
+What it does
 ------------
-* Master project per lodge year: "Charity Work YYYY-YYYY"
-* Each charitable activity is a task inside that project, tagged with
-  one of the 24 Grand Lodge categories (1001 Youth Scholarships …
-  9999 Categories Not Covered)
-* Volunteers (and optionally employees) log hours via Odoo timesheets
-  against these tasks
-* Extra per-entry fields capture what the Grand Lodge report needs:
-  miles, non-cash value, cash, head count, helper flag
-* Hours require validation by a Secretary before counting
-* Annual wrap-up wizard closes the year, generates the PDF report,
-  and creates the next year's project
-* Calendar events can be linked to a charity task so hours logged
-  from the event prefill the category
+* One Charity Project per lodge year: "Charity Work YYYY-YYYY".
+* Each activity = a task tagged with a Grand Lodge category
+  (30 defaults, 1001 Youth Scholarships … 9999 Categories Not Covered).
+* Volunteers clock in via attendance; hours auto-validate on save
+  (no more manual Secretary click) and roll up to the category.
+* Quick Entry wizard mirrors the paper Data Collection Survey
+  (Columns A–J) — one form fills one contribution + optional per-
+  member personal-record credit.
+* When an attendance record matches a Quick Entry attribution,
+  attendance wins: the personal-record line is deleted and the
+  contribution's declared total is adjusted so nothing double-counts.
+* Attendance auto-creates Confirmed contributions per (task, date)
+  so every hour hits the elks.org push queue.
+
+Reporting & submission
+----------------------
+* Dashboard: one widget-style card per (category × lodge year) with
+  current-vs-prior-year deltas, right-sized to fit any viewport.
+* BPOE Data Collection Survey PDF — paper-form-style, landscape,
+  A–J columns, per-section subtotals + grand total + signature block.
+  Bind directly to the Contributions list (Print dropdown) or run
+  full-year from the Grand Lodge Report wizard.
+* GL Website Entry Sheet PDF — one card per line for hand-entering
+  into elks.org if the extension isn't available.
+* Grand Lodge Charity Report + CSV export in the elks.org format.
+* Public website snippet with "year-to-date totals" + per-category
+  cards, per-category visibility toggle.
+
+Elks.org auto-push
+------------------
+Companion Chrome extension in ``elkscharity/extension/`` submits
+confirmed contributions to the Local Lodge Reporting form using the
+Secretary's own logged-in browser session — bypassing elks.org's
+bot detection that killed the earlier server-side Playwright path.
+Zero credentials stored in Odoo; extension polls via per-user API
+key (generated on Preferences → Elks.org Credentials). Dry-run mode
+for test databases.
+
+Setup helpers
+-------------
+* Missing Charity Category menu — batch-triage attendance rows that
+  need a GL code assigned.
+* Pending Elks.org Push menu — see exactly what will be submitted.
+* Rebuild Attendance Contributions button (Configuration) — manually
+  re-run the (task, date) contribution generator if something looks
+  off.
+* Auto-alphabetize app launcher on install/upgrade (mirrors the
+  elkssecretary Alphabetize App Menus tool).
 
 Dependencies
 ------------
-base, mail, project, hr_timesheet, calendar, elkscontacts, elksfrs
+base, mail, project, hr_timesheet, hr_attendance, calendar, website,
+portal, elkscontacts, elksfrs
 """,
     "author": "Danny Santiago",
     "website": "https://dannysantiago.info",

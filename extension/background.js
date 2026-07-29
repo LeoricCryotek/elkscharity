@@ -139,11 +139,21 @@ function extractElksErrorMessage(html) {
     // ColdFusion cfform errors are pushed to a JS array and
     // shown via alert().  Match the array-push lines directly.
     // Example: _CF_error_messages[0] = "Please submit the ...";
+    // Ignore the "Final Charitable Report will be enabled April 1,
+    // YYYY" text — that's the tooltip on a disabled year-end-only
+    // button on the landing page, not an actual submission error.
+    // Same reason we no longer key success detection off "Days
+    // Since Last Charitable Event" alone.
+    const NOISE_PATTERNS = [
+        /final charitable report/i,
+    ];
+    const isNoise = (msg) => NOISE_PATTERNS.some((rx) => rx.test(msg));
+
     const cfMatches = [
         ...html.matchAll(
             /_CF_error_messages\[\d+\]\s*=\s*['"]([^'"]{5,300})['"]/g
         ),
-    ].map((m) => m[1].trim());
+    ].map((m) => m[1].trim()).filter((m) => !isNoise(m));
     if (cfMatches.length) {
         return cfMatches.slice(0, 3).join(" | ");
     }
@@ -307,47 +317,43 @@ async function submitOne(formUrl, payload) {
         });
         const body = await postResp.text();
         const low = body.toLowerCase();
-        // Success signal: the "Days Since Last Charitable Event"
-        // banner appears on the landing page that elks.org returns
-        // AFTER a successful submission.  Extra guard: the form's
-        // programid select is NOT present on that landing (that
-        // would mean we're still on the entry form → rejection).
-        if (low.includes("days since last charitable event") &&
-            !low.includes('name="programid"')) {
+        // Success signal (revised 1.2.8):  the ONLY reliable check
+        // is whether elks.org returned the form or the landing page.
+        //   - Form present → still on entry form → rejection
+        //   - Form absent  → landing page → success
+        // We detect the form by looking for the "submitProgram"
+        // button name — that's the "Submit New Charitable Program"
+        // input that only exists on the entry form.
+        //
+        // Prior versions also grepped for a "Final Charitable Report
+        // will be enabled April 1, 2027" string to detect errors,
+        // but that string ALSO appears on the landing page (as the
+        // tooltip on a disabled "Submit Final Report" button), so
+        // successful submissions got mis-classified as failures and
+        // the extension retried, creating dozens of duplicates on
+        // elks.org.
+        const stillOnEntryForm = /name=["']submitProgram["']/i.test(body);
+        if (!stillOnEntryForm) {
+            // Landing page → save succeeded.  Try to extract the
+            // most recent recordID from the response for the audit
+            // trail; falls back to "OK" if we can't.
             const m = low.match(/recordid[^0-9]*(\d+)/);
             return {
                 ok: true,
                 confirmation: m ? "recordID=" + m[1] : "OK",
             };
         }
-        // Rejection path — pull the actual server-side error text
-        // out of the response so we can show it inline instead of
-        // making the Secretary open an HTML attachment.  Try a few
-        // known elks.org error-container patterns.
-        let elksMsg = extractElksErrorMessage(body);
-        // If the form re-rendered (still shows programID select),
-        // it means elks.org rejected our POST and returned the form
-        // page with an inline error.
-        const formRedisplayed = low.includes('name="programid"');
-        if (formRedisplayed || elksMsg) {
-            return {
-                ok: false,
-                error: elksMsg
-                    ? ("elks.org: " + elksMsg)
-                    : ("elks.org rejected the submission (form " +
-                       "re-rendered with no extractable message — " +
-                       "check attached HTML)"),
-                html: body.slice(0, 20000),
-            };
-        }
-        // Truly ambiguous 200 — treat as unverified success and
-        // include a chunk of the response in the confirmation for
-        // audit.  User can spot-check on elks.org.
+        // Entry form re-rendered → elks.org rejected our POST.
+        // Pull whatever validation message we can.
+        const elksMsg = extractElksErrorMessage(body);
         return {
-            ok: true,
-            confirmation:
-                "OK (unverified — " + postResp.status +
-                ", " + body.length + " chars)",
+            ok: false,
+            error: elksMsg
+                ? ("elks.org: " + elksMsg)
+                : ("elks.org rejected the submission (form " +
+                   "re-rendered with no extractable message — " +
+                   "check attached HTML)"),
+            html: body.slice(0, 20000),
         };
     } catch (e) {
         return {
@@ -356,6 +362,112 @@ async function submitOne(formUrl, payload) {
             html: "",
         };
     } finally { clearTimeout(to); }
+}
+
+// ── purge duplicates on elks.org ───────────────────────────────────
+// One-shot cleanup for after a false-negative retry storm left many
+// duplicate records on elks.org.  Fetches the landing page for the
+// current lodge year, groups records by (programDate, programName,
+// programID), and deletes all but the FIRST of each group.  Returns
+// {scanned, kept, deleted, errors}.
+//
+// Elks.org's delete flow: POST to /grandlodge/charity/local.cfm with
+// deleteRecord=Delete This Program + ID=<recordID>.  Confirmation
+// dialog is client-side only; the server accepts a plain POST.
+async function purgeDuplicates() {
+    const formUrl =
+        "https://www.elks.org/grandlodge/charity/local.cfm";
+    const landingResp = await fetch(formUrl, {
+        method: "GET",
+        credentials: "include",
+        redirect: "follow",
+    });
+    if (landingResp.status !== 200) {
+        throw new Error("landing page HTTP " + landingResp.status);
+    }
+    const landingHtml = await landingResp.text();
+    if (/elkslogin\.cfm/i.test(landingResp.url || "")) {
+        throw new Error("elks.org session expired — log in first");
+    }
+
+    // Parse the landing page.  Each row is inside a form that
+    // POSTs to /grandlodge/charity/local.cfm with a hidden ID
+    // input and editRecord submit button.  Group siblings.
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(landingHtml, "text/html");
+
+    // Every existing record renders an <input name="ID" value="N">
+    // followed by an <input name="editRecord"> in the same form.
+    // Pull the IDs + surrounding row context for grouping.
+    const records = [];
+    for (const form of doc.querySelectorAll("form")) {
+        const idInput = form.querySelector('input[name="ID"]');
+        const editInput = form.querySelector('input[name="editRecord"]');
+        if (!idInput || !editInput) continue;
+        const rid = idInput.value;
+        if (!rid || rid === "-1") continue;
+        // Pull the row's text so we can group by
+        // (programDate + programName) for dedupe grouping.
+        // The parent <tr> has the date/name cells.
+        let rowText = "";
+        let node = form.parentElement;
+        while (node && node.tagName !== "TR") node = node.parentElement;
+        if (node) rowText = (node.textContent || "").trim().replace(/\s+/g, " ");
+        records.push({ id: rid, rowText });
+    }
+
+    // Group by rowText (date + program name + counts — a full-row
+    // fingerprint that will match exact duplicates from the false-
+    // negative retry storm).
+    const groups = new Map();
+    for (const rec of records) {
+        const key = rec.rowText;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(rec);
+    }
+
+    let scanned = records.length;
+    let kept = 0;
+    let deleted = 0;
+    const errors = [];
+
+    for (const [key, group] of groups.entries()) {
+        // Keep the FIRST (usually the earliest/original submission);
+        // delete the rest.
+        kept++;
+        for (let i = 1; i < group.length; i++) {
+            const rec = group[i];
+            try {
+                const delBody = new URLSearchParams();
+                delBody.set("ID", rec.id);
+                delBody.set("deleteRecord", "Delete This Program");
+                const delResp = await fetch(formUrl, {
+                    method: "POST",
+                    credentials: "include",
+                    redirect: "follow",
+                    body: delBody.toString(),
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                });
+                if (delResp.status !== 200) {
+                    errors.push(
+                        `ID ${rec.id}: HTTP ${delResp.status}`
+                    );
+                } else {
+                    deleted++;
+                    console.log(
+                        `[Elks.org Purge] 🗑 deleted duplicate ID=${rec.id}`,
+                    );
+                }
+                await new Promise((r) => setTimeout(r, 300));
+            } catch (e) {
+                errors.push(`ID ${rec.id}: ${e.message}`);
+            }
+        }
+    }
+
+    return { scanned, kept, deleted, errors };
 }
 
 // ── main poll cycle ────────────────────────────────────────────────
@@ -565,6 +677,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     if (msg && msg.type === "test_elks_session") {
         elksSessionAlive()
+            .then((r) => sendResponse({ok: true, result: r}))
+            .catch((e) => sendResponse({ok: false, error: e.message}));
+        return true;
+    }
+    if (msg && msg.type === "purge_duplicates") {
+        purgeDuplicates()
             .then((r) => sendResponse({ok: true, result: r}))
             .catch((e) => sendResponse({ok: false, error: e.message}));
         return true;

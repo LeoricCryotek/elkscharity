@@ -135,6 +135,13 @@
   <div class="row">
     <button id="preview-pending">Show Queue in Odoo</button>
   </div>
+  <div class="row">
+    <button id="purge-duplicates"
+            style="background:#fff3cd; border-color:#ffc107;"
+            title="One-shot cleanup: delete duplicate rows on elks.org that were created by the pre-1.2.8 false-negative retry bug. Groups rows by identical date+program+counts and keeps only the first of each group.">
+      Purge Duplicates on Elks.org
+    </button>
+  </div>
 
   <div id="pending-count-row" class="muted"
        style="margin-top: 10px; font-size: 12px; text-align: center;">

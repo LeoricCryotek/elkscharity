@@ -236,6 +236,41 @@ $("preview-pending").addEventListener("click", async () => {
     chrome.tabs.create({url: url});
 });
 
+$("purge-duplicates").addEventListener("click", async () => {
+    const confirmed = confirm(
+        "This will scan every charity record on elks.org for the " +
+        "current lodge year, group rows with IDENTICAL date + " +
+        "program + counts, and DELETE all but the first of each " +
+        "duplicate group.  This is meant to clean up after the " +
+        "pre-1.2.8 false-negative retry bug.\n\n" +
+        "Records without duplicates will NOT be touched.\n\n" +
+        "This cannot be undone.  Proceed?"
+    );
+    if (!confirmed) return;
+    $("purge-duplicates").textContent = "Purging…";
+    $("purge-duplicates").disabled = true;
+    chrome.runtime.sendMessage({type: "purge_duplicates"}, (resp) => {
+        $("purge-duplicates").textContent = "Purge Duplicates on Elks.org";
+        $("purge-duplicates").disabled = false;
+        if (!resp) return;
+        if (!resp.ok) {
+            alert("Purge failed: " + resp.error);
+            return;
+        }
+        const r = resp.result;
+        alert(
+            "Purge complete.\n\n" +
+            "Scanned:  " + r.scanned + " records\n" +
+            "Kept:     " + r.kept + " unique rows\n" +
+            "Deleted:  " + r.deleted + " duplicates\n" +
+            (r.errors && r.errors.length
+                ? "\nErrors (" + r.errors.length + "):\n  " +
+                  r.errors.slice(0, 5).join("\n  ")
+                : "")
+        );
+    });
+});
+
 $("test-elks").addEventListener("click", async () => {
     $("test-elks").textContent = "Testing…";
     chrome.runtime.sendMessage({type: "test_elks_session"}, (resp) => {

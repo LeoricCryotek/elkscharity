@@ -757,11 +757,16 @@ async function purgeDuplicates() {
             verified,
             stillPresent,
             errors,
-            delFieldName: cachedDelFieldName,
-            delFieldValue: cachedDelFieldValue,
-            // If discovery failed, this sample lets the user copy
-            // the edit-page HTML from the popup and paste it here so
-            // we can adjust the regex without a code-side round trip.
+            // Legacy popup fields — reuse to show the discovered
+            // form's trigger.  If cachedDelForm is null, popup falls
+            // back to editHtmlSample rendering.
+            delFieldName: cachedDelForm
+                ? cachedDelForm.triggerName : null,
+            delFieldValue: cachedDelForm
+                ? cachedDelForm.triggerValue : null,
+            delFormAction: cachedDelForm ? cachedDelForm.action : null,
+            delFormHiddens: cachedDelForm
+                ? Object.keys(cachedDelForm.hiddens).join(",") : null,
             editHtmlSample: firstEditHtmlSample,
             editHtmlSampleId: firstEditHtmlSampleId,
         },
@@ -779,8 +784,11 @@ async function purgeDuplicates() {
         deleted: verified,
         stillPresent,
         errors,
-        delFieldName: cachedDelFieldName,
-        delFieldValue: cachedDelFieldValue,
+        delFieldName: cachedDelForm ? cachedDelForm.triggerName : null,
+        delFieldValue: cachedDelForm ? cachedDelForm.triggerValue : null,
+        delFormAction: cachedDelForm ? cachedDelForm.action : null,
+        delFormHiddens: cachedDelForm
+            ? Object.keys(cachedDelForm.hiddens).join(",") : null,
         editHtmlSample: firstEditHtmlSample,
         editHtmlSampleId: firstEditHtmlSampleId,
     };

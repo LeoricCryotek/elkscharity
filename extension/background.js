@@ -364,63 +364,64 @@ async function submitOne(formUrl, payload) {
     } finally { clearTimeout(to); }
 }
 
-// ── delete-button discovery ─────────────────────────────────────────
-// elks.org's edit page renders the Delete button in one of several
-// ways depending on the ColdFusion page version:
-//   1. <input type="submit" name="deleteRecord" value="Delete This Program">
-//   2. <input type="button" name="deleteRecord" value="Delete This Program"
-//      onclick="if (confirm(...)) form.submit()">
-//   3. <button type="submit" name="deleteRecord" value="Delete…">Delete</button>
-//   4. <a href="...?ID=N&deleteRecord=Y" ...>Delete</a>  (rare)
-// Try each pattern in turn; return {name, value} for the first match.
-function findDeleteField(html) {
-    // Pattern 1 & 2: <input> with type=submit|button, name+value both
-    // present, value containing "Delete" (case-insensitive).
-    const inputPatterns = [
-        // name before value
-        /<input[^>]*\btype=["'](?:submit|button)["'][^>]*\bname=["']([^"']+)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["']/i,
-        // value before name
-        /<input[^>]*\btype=["'](?:submit|button)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\bname=["']([^"']+)["']/i,
-        // name before type, value before name (any ordering)
-        /<input[^>]*\bname=["']([^"']+)["'][^>]*\btype=["'](?:submit|button)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["']/i,
-        /<input[^>]*\bname=["']([^"']+)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\btype=["'](?:submit|button)["']/i,
-        /<input[^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\bname=["']([^"']+)["'][^>]*\btype=["'](?:submit|button)["']/i,
-        /<input[^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\btype=["'](?:submit|button)["'][^>]*\bname=["']([^"']+)["']/i,
-        // fallback — no type attr at all (defaults to type=submit
-        // in HTML5 for input inside a form)
-        /<input[^>]*\bname=["']([^"']+)["'][^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["']/i,
-        /<input[^>]*\bvalue=["']([^"']*[Dd]elete[^"']*)["'][^>]*\bname=["']([^"']+)["']/i,
-    ];
-    for (let i = 0; i < inputPatterns.length; i++) {
-        const m = html.match(inputPatterns[i]);
-        if (!m) continue;
-        // Figure out which capture group is name vs value: whichever
-        // contains "delete" is the value.
-        const [, a, b] = m;
-        if (/[Dd]elete/.test(a)) return {name: b, value: a};
-        return {name: a, value: b};
+// ── delete-form discovery ──────────────────────────────────────────
+// elks.org's edit page has a SEPARATE little form for Delete that
+// looks like this (confirmed 2026-07 via DOM inspection):
+//
+//   <form action="/grandlodge/charity/local.cfm" method="POST">
+//     <input type="hidden" name="recordID" value="2313618">
+//     <input type="hidden" name="deleteMe" value="false">
+//     <input type="button" name="deleteProgram" id="deleteProgram"
+//            value="Delete This Program"
+//            onclick="if (confirm('Are you sure…')) {
+//                       form.deleteMe.value = 'true';
+//                       form.submit();
+//                     }">
+//   </form>
+//
+// The button is type="button" (NOT submit).  Only the two hidden
+// fields are submitted, with deleteMe flipped to "true" by the
+// onclick handler.  So the real delete payload is:
+//     recordID=<N>&deleteMe=true
+//
+// Prior versions of the extension guessed at "deleteRecord=Delete
+// This Program" — a completely fabricated field name.  ColdFusion
+// silently ignored the POST, returned 200, and nothing was deleted.
+// This helper finds the actual delete form and returns everything
+// we need to POST it.
+function findDeleteForm(html) {
+    // Locate any <form> containing name="deleteMe" — that's the
+    // signature of the elks.org delete form.  Iterate all forms so
+    // we don't accidentally match the surrounding Edit form.
+    const formRe = /<form\b([^>]*)>([\s\S]*?)<\/form>/gi;
+    let m;
+    while ((m = formRe.exec(html)) !== null) {
+        const formAttrs = m[1];
+        const formInner = m[2];
+        if (!/name=["']deleteMe["']/i.test(formInner)) continue;
+        const actionMatch = formAttrs.match(/action=["']([^"']+)["']/i);
+        const methodMatch = formAttrs.match(/method=["']([^"']+)["']/i);
+        // Extract all hidden inputs (both attribute orderings).
+        const hiddens = {};
+        const reA =
+            /<input[^>]*\btype=["']hidden["'][^>]*\bname=["']([^"']+)["'][^>]*\bvalue=["']([^"']*)["']/gi;
+        const reB =
+            /<input[^>]*\btype=["']hidden["'][^>]*\bvalue=["']([^"']*)["'][^>]*\bname=["']([^"']+)["']/gi;
+        let h;
+        while ((h = reA.exec(formInner)) !== null) hiddens[h[1]] = h[2];
+        while ((h = reB.exec(formInner)) !== null) hiddens[h[2]] = h[1];
+        return {
+            action: actionMatch ? actionMatch[1]
+                                : "/grandlodge/charity/local.cfm",
+            method: (methodMatch && methodMatch[1]) || "POST",
+            // Hidden fields on the form.  For each record we're going
+            // to override recordID with the current record's ID.
+            hiddens,
+            // Field the onclick handler flips before submitting.
+            triggerName: "deleteMe",
+            triggerValue: "true",
+        };
     }
-    // Pattern 3: <button ...>Delete...</button>
-    const btn = html.match(
-        /<button[^>]*\bname=["']([^"']+)["'][^>]*value=["']([^"']*)["'][^>]*>[^<]*[Dd]elete[^<]*<\/button>/i
-    ) || html.match(
-        /<button[^>]*\bvalue=["']([^"']*)["'][^>]*name=["']([^"']+)["'][^>]*>[^<]*[Dd]elete[^<]*<\/button>/i
-    ) || html.match(
-        /<button[^>]*\bname=["']([^"']+)["'][^>]*>[^<]*[Dd]elete[^<]*<\/button>/i
-    );
-    if (btn) {
-        if (btn.length >= 3) {
-            const [, a, b] = btn;
-            if (/[Dd]elete/.test(a)) return {name: b, value: a};
-            return {name: a, value: b || "Delete"};
-        }
-        return {name: btn[1], value: "Delete"};
-    }
-    // Pattern 4: <a href="?...deleteRecord=..."> — extract from URL.
-    const link = html.match(
-        /<a[^>]*href=["'][^"']*[?&](delete[Rr]ecord)=([^"'&]*)/i
-    );
-    if (link) return {name: link[1], value: decodeURIComponent(link[2])};
     return null;
 }
 
@@ -542,10 +543,11 @@ async function purgeDuplicates() {
     let attempted = 0;
     let serverAccepted = 0;
     const errors = [];
-    // Discover the correct delete-field name from the FIRST record's
-    // edit page.  Cache it — every record uses the same edit template.
-    let cachedDelFieldName = null;
-    let cachedDelFieldValue = null;
+    // Discover the delete-form structure from the FIRST record's edit
+    // page.  Cache the shape (action URL + hidden field names +
+    // trigger field) — every record uses the same edit template.
+    // We override recordID with each record's own ID at POST time.
+    let cachedDelForm = null;   // {action, method, hiddens, triggerName, triggerValue}
     // If discovery fails, capture ONE edit-page sample to render in
     // the popup so the user can share it without opening
     // chrome://extensions → Inspect service worker.
@@ -587,22 +589,13 @@ async function purgeDuplicates() {
                 continue;
             }
             const editHtml = await editResp.text();
-            // Discover the delete-button field on the FIRST edit page
-            // ONLY (cache it — same template for every record).
-            //
-            // v1.4.1: elks.org may use <input type="button" ...
-            // onclick="if(confirm(...)) form.submit()"> instead of
-            // type="submit", so match any <input>/<button> whose
-            // value or text contains "Delete".  Also captures a
-            // sample of the edit HTML into purgeStatus so the user
-            // can view/copy it from the popup if discovery still fails.
-            if (!cachedDelFieldName) {
-                cachedDelFieldName = findDeleteField(editHtml);
-                if (!cachedDelFieldName) {
-                    // Dump first HTML sample to purgeStatus so the
-                    // user can share it without cracking open
-                    // chrome://extensions.  Only dump ONCE (guarded
-                    // by editHtmlSampleDumped flag below).
+            // Discover the delete FORM on the FIRST edit page only
+            // (cache — same template for every record).  Uses the
+            // real elks.org shape: hidden recordID + hidden
+            // deleteMe=false, JS flips deleteMe to true on submit.
+            if (!cachedDelForm) {
+                cachedDelForm = findDeleteForm(editHtml);
+                if (!cachedDelForm) {
                     if (!editHtmlSampleDumped) {
                         editHtmlSampleDumped = true;
                         const sample = editHtml
@@ -611,45 +604,68 @@ async function purgeDuplicates() {
                             .substring(0, 5000);
                         console.warn(
                             `[Elks.org Purge] Edit page for ID=${rec.id} ` +
-                            `had no Delete button.  HTML head:\n` +
+                            `had no delete form.  HTML head:\n` +
                             editHtml.substring(0, 3000)
                         );
-                        // Stash the sample so the popup can render it.
                         firstEditHtmlSample = sample;
                         firstEditHtmlSampleId = rec.id;
                     }
                     errors.push(
-                        `ID ${rec.id}: no Delete button found on edit ` +
-                        `page — see HTML sample in popup below`
+                        `ID ${rec.id}: no delete form on edit page — ` +
+                        `see HTML sample in popup`
                     );
                     continue;
                 }
-                cachedDelFieldValue = cachedDelFieldName.value;
-                cachedDelFieldName = cachedDelFieldName.name;
                 console.log(
-                    `[Elks.org Purge] Discovered delete field: ` +
-                    `name="${cachedDelFieldName}" ` +
-                    `value="${cachedDelFieldValue}"`,
+                    `[Elks.org Purge] Discovered delete form: ` +
+                    `action=${cachedDelForm.action}, ` +
+                    `hiddens=${Object.keys(cachedDelForm.hiddens).join(",")}, ` +
+                    `trigger=${cachedDelForm.triggerName}=` +
+                    `${cachedDelForm.triggerValue}`,
                 );
                 await setProgress({
                     phase: "deleting",
-                    message: `${msg} (delete field: ${cachedDelFieldName})`,
+                    message:
+                        `${msg} (delete form: ` +
+                        `${Object.keys(cachedDelForm.hiddens).join("+")})`,
                     current: i + 1,
                     total,
                 });
             }
-            // theUID token if elks.org includes one on the edit page.
-            const uidMatch = editHtml.match(
-                /name=["']theUID["']\s+value=["']([^"']*)["']/i
-            );
 
-            // Step 2: POST the actual delete.
+            // Step 2: POST the real delete payload.  For each record,
+            // start from the cached hiddens, then override:
+            //   - recordID = this record's ID
+            //   - deleteMe = "true" (JS trigger equivalent)
+            // Any other hiddens (theUID if elks.org adds one later)
+            // pass through unchanged.
             const delBody = new URLSearchParams();
-            delBody.set("ID", rec.id);
-            delBody.set(cachedDelFieldName, cachedDelFieldValue);
-            if (uidMatch) delBody.set("theUID", uidMatch[1]);
-            const delResp = await fetch(formUrl, {
-                method: "POST",
+            for (const [name, value] of Object.entries(cachedDelForm.hiddens)) {
+                if (name === cachedDelForm.triggerName) {
+                    delBody.set(name, cachedDelForm.triggerValue);
+                } else if (name === "recordID") {
+                    delBody.set(name, rec.id);
+                } else {
+                    delBody.set(name, value);
+                }
+            }
+            // Belt-and-suspenders: if for some reason recordID wasn't
+            // in the cached hiddens (page variant), set it explicitly.
+            if (!delBody.has("recordID")) delBody.set("recordID", rec.id);
+            if (!delBody.has(cachedDelForm.triggerName)) {
+                delBody.set(cachedDelForm.triggerName,
+                            cachedDelForm.triggerValue);
+            }
+            // Resolve the cached action URL against the form base if
+            // it's relative (starts with '/').
+            const delUrl = cachedDelForm.action.startsWith("http")
+                ? cachedDelForm.action
+                : "https://www.elks.org" +
+                  (cachedDelForm.action.startsWith("/")
+                    ? cachedDelForm.action
+                    : "/" + cachedDelForm.action);
+            const delResp = await fetch(delUrl, {
+                method: cachedDelForm.method || "POST",
                 credentials: "include",
                 redirect: "follow",
                 body: delBody.toString(),
@@ -665,7 +681,7 @@ async function purgeDuplicates() {
                 serverAccepted++;
                 console.log(
                     `[Elks.org Purge] ${i + 1}/${total}: ID=${rec.id} ` +
-                    `-> POST accepted (verification pending)`,
+                    `-> POST accepted (payload: ${delBody.toString()})`,
                 );
             }
             // Small delay to stay polite.
@@ -713,9 +729,9 @@ async function purgeDuplicates() {
     if (stillPresent > 0 && verified === 0) {
         errors.push(
             `NOTHING was actually deleted despite ${serverAccepted} ` +
-            `HTTP 200 responses.  The delete field name ` +
-            `"${cachedDelFieldName}" may be wrong.  Check the console ` +
-            `for the edit-page HTML dump above.`
+            `HTTP 200 responses.  Discovered delete-form payload was ` +
+            `[${cachedDelForm ? Object.keys(cachedDelForm.hiddens).join(",") : "?"}]` +
+            ` — server may require additional session fields.`
         );
     } else if (stillPresent > 0) {
         errors.push(

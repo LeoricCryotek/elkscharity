@@ -48,6 +48,26 @@ async function setSettings(patch) {
     });
 }
 
+// ── stop-request helpers ────────────────────────────────────────────
+// Cooperative-cancel flag written by the popup's Stop button.  Loops
+// inside pollAndPush / purgeDuplicates check this before each
+// iteration and break out gracefully, leaving progress-so-far intact.
+//
+// The flag lives in chrome.storage.local under "stopRequested" so the
+// popup, background, and any tabs share a single source of truth even
+// while the MV3 service worker is idle-restarting.
+async function isStopRequested() {
+    return new Promise((res) => {
+        chrome.storage.local.get(["stopRequested"],
+            (v) => res(!!(v && v.stopRequested)));
+    });
+}
+async function clearStopRequest() {
+    return new Promise((res) => {
+        chrome.storage.local.set({stopRequested: false}, () => res());
+    });
+}
+
 // ── status tracking for the popup ──────────────────────────────────
 async function setStatus(patch) {
     const cur = await new Promise((r) =>
@@ -458,6 +478,8 @@ async function purgeDuplicates() {
         );
     }
 
+    // Fresh run — clear any leftover stop flag from a prior abort.
+    await clearStopRequest();
     await setProgress({phase: "scanning", message: "Loading landing page…"});
     console.log("[Elks.org Purge] Loading landing page…");
 
@@ -555,7 +577,23 @@ async function purgeDuplicates() {
     let firstEditHtmlSample = null;
     let firstEditHtmlSampleId = null;
 
+    let stopped = false;
     for (let i = 0; i < toDelete.length; i++) {
+        // Cooperative cancel: user clicked Stop in the popup.  Break
+        // out cleanly so the caller still gets a result payload with
+        // partial counts.
+        if (await isStopRequested()) {
+            stopped = true;
+            console.log(
+                `[Elks.org Purge] STOP requested — halting at ` +
+                `${i}/${total} (deleted so far: ${serverAccepted})`,
+            );
+            errors.push(
+                `Stopped by user at ${i}/${total} — ` +
+                `${serverAccepted} POST(s) attempted so far`
+            );
+            break;
+        }
         const rec = toDelete[i];
         attempted++;
         const msg = `Deleting ${i + 1} of ${total} (ID ${rec.id})…`;
@@ -740,13 +778,17 @@ async function purgeDuplicates() {
         );
     }
 
+    // Clear the stop flag so the next run isn't pre-cancelled.
+    await clearStopRequest();
     await setProgress({
         phase: "done",
         message:
-            `Done. Scanned ${scanned}, kept ${kept}, ` +
+            (stopped ? "Stopped by user. " : "Done. ") +
+            `Scanned ${scanned}, kept ${kept}, ` +
             `verified deletions ${verified}/${total}`,
         current: total,
         total,
+        stopped,
         // Full result payload so the popup can render the summary
         // inline (no alert() dialog required).  Survives popup close.
         result: {
@@ -769,6 +811,7 @@ async function purgeDuplicates() {
                 ? Object.keys(cachedDelForm.hiddens).join(",") : null,
             editHtmlSample: firstEditHtmlSample,
             editHtmlSampleId: firstEditHtmlSampleId,
+            stopped,
         },
     });
     console.log(
@@ -791,6 +834,7 @@ async function purgeDuplicates() {
             ? Object.keys(cachedDelForm.hiddens).join(",") : null,
         editHtmlSample: firstEditHtmlSample,
         editHtmlSampleId: firstEditHtmlSampleId,
+        stopped,
     };
 }
 
@@ -887,7 +931,18 @@ async function pollAndPush() {
     // Track the most recent error so the popup can show it instead of
     // just "N failed" with no context.  Cleared on each cycle.
     let lastError = null;
+    let stoppedByUser = false;
     for (const it of items) {
+        // Cooperative cancel: same flag the purge loop checks.  Break
+        // out cleanly so the caller (Sync) still gets a partial count.
+        if (await isStopRequested()) {
+            stoppedByUser = true;
+            console.log(
+                `[Elks.org Push] STOP requested — halting at ` +
+                `${successes + failures}/${items.length}`,
+            );
+            break;
+        }
         const label = `#${it.id} ${it.display_name || ""}`;
         try {
             if (dryRun) {
@@ -975,14 +1030,16 @@ async function pollAndPush() {
     }
     return {
         ok: failures === 0,
-        phase: "completed",
+        phase: stoppedByUser ? "stopped" : "completed",
         pushed: successes,
         failed: failures,
         attempted: items.length,
         skipped: 0,
         lastError,
+        stopped: stoppedByUser,
         message:
             (dryRun ? "DRY RUN — " : "") +
+            (stoppedByUser ? "STOPPED — " : "") +
             successes + " pushed, " + failures + " failed " +
             "(of " + items.length + ").",
     };
@@ -1049,31 +1106,43 @@ async function syncNow(opts) {
     }
 
     console.log("[Elks.org Sync] Push phase result:", pushResult);
-    await setSyncProgress({
-        phase: "sync_between",
-        message:
-            "Phase 1 done (" + (pushResult.pushed || 0) +
-            " pushed, " + (pushResult.failed || 0) + " failed). " +
-            "Starting purge…",
-    });
-    // Brief pause so any just-created elks.org rows show up on the
-    // landing page before the purge scans it.
-    await new Promise((r) => setTimeout(r, 1500));
 
-    // ── Phase 2: purge duplicates ─────────────────────────────
-    // If push failed on session/config, purge will also fail — but
-    // we still try so the user sees BOTH sets of errors, not just
-    // whichever fired first.
+    // If the user hit Stop during Phase 1, don't start Phase 2 —
+    // skip straight to the combined-result render.
+    const stoppedInPush = !!pushResult.stopped;
     let purgeResult;
-    try {
-        purgeResult = await purgeDuplicates();
-    } catch (e) {
+    if (stoppedInPush) {
+        await setSyncProgress({
+            phase: "sync_between",
+            message: "Stopped by user during push. Skipping purge.",
+        });
         purgeResult = {
             scanned: 0, kept: 0, attempted: 0, serverAccepted: 0,
             deleted: 0, stillPresent: 0,
-            errors: ["purge threw: " + e.message],
+            errors: ["Purge skipped — sync was stopped during push"],
+            stopped: true,
         };
-        console.error("[Elks.org Sync] purge phase threw:", e);
+    } else {
+        await setSyncProgress({
+            phase: "sync_between",
+            message:
+                "Phase 1 done (" + (pushResult.pushed || 0) +
+                " pushed, " + (pushResult.failed || 0) + " failed). " +
+                "Starting purge…",
+        });
+        // Brief pause so any just-created elks.org rows show up on
+        // the landing page before the purge scans it.
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+            purgeResult = await purgeDuplicates();
+        } catch (e) {
+            purgeResult = {
+                scanned: 0, kept: 0, attempted: 0, serverAccepted: 0,
+                deleted: 0, stillPresent: 0,
+                errors: ["purge threw: " + e.message],
+            };
+            console.error("[Elks.org Sync] purge phase threw:", e);
+        }
     }
     console.log("[Elks.org Sync] Purge phase result:", purgeResult);
 
@@ -1101,10 +1170,12 @@ async function syncNow(opts) {
         editHtmlSampleId: purgeResult.editHtmlSampleId || null,
     };
 
+    const wasStopped = stoppedInPush || !!purgeResult.stopped;
+    combined.stopped = wasStopped;
     await setSyncProgress({
         phase: "sync_done",
         message:
-            "Sync complete. " +
+            (wasStopped ? "Sync STOPPED. " : "Sync complete. ") +
             combined.pushed + " pushed, " +
             combined.verified + " duplicates removed.",
         current: 1, total: 1,

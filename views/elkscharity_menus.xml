@@ -112,6 +112,17 @@
               sequence="25"
               groups="group_elkscharity_secretary"/>
 
+    <!-- Diagnostic list of every attendance flagged Non-Elk Helper.
+         Explains why the elks.org Helper columns populate.  User
+         inspects and unchecks the box on rows that shouldn't be
+         helpers.  See action def in views/attendance_views.xml. -->
+    <menuitem id="menu_elkscharity_helper_audit"
+              name="Non-Elk Helper Audit"
+              parent="menu_elkscharity_hours"
+              action="action_charity_attendance_helper_audit"
+              sequence="27"
+              groups="group_elkscharity_secretary"/>
+
     <menuitem id="menu_elkscharity_wrapup"
               name="Year-End Wrap-Up"
               parent="menu_elkscharity_hours"

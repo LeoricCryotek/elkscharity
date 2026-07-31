@@ -151,9 +151,17 @@ class ProjectTask(models.Model):
                     ('x_validated', '=', True),
                 ])
 
-            # Build dedupe set keyed on (employee_id, date) for attendance
+            # Build dedupe set keyed on (employee_id, date) for
+            # attendance.  Use LOCAL date (company tz) — timesheet
+            # lines store l.date as a plain date so we must match in
+            # local time, else evening attendance dedupes against the
+            # WRONG day and both rows survive. Fixed 19.0.7.12.
+            from odoo.addons.elkscharity.models.hr_attendance import (
+                _local_date,
+            )
             att_keys = set(
-                (a.employee_id.id, a.check_in.date() if a.check_in else False)
+                (a.employee_id.id,
+                 _local_date(self.env, a.check_in) if a.check_in else False)
                 for a in att_validated
             )
 
@@ -319,9 +327,13 @@ class ProjectTask(models.Model):
         cash = sum(atts.mapped("x_cash_value") or [0.0])
         non_cash = sum(atts.mapped("x_non_cash_value") or [0.0])
 
+        from odoo.addons.elkscharity.models.hr_attendance import (
+            _local_date,
+        )
         event_date = (
             self.x_event_date
-            or min(a.check_in.date() for a in atts if a.check_in)
+            or min(_local_date(self.env, a.check_in)
+                   for a in atts if a.check_in)
         )
 
         Contrib = self.env["elks.charity.contribution"].sudo()

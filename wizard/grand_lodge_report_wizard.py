@@ -129,9 +129,15 @@ class GrandLodgeReportWizard(models.TransientModel):
                 lambda c: c.task_id.id == task.id
             )
 
-            # Dedupe: attendance wins over timesheet for same employee+date
+            # Dedupe: attendance wins over timesheet for same employee+date.
+            # Use LOCAL (company-tz) date to match l.date — see
+            # _local_date() docstring.  Fixed 19.0.7.12.
+            from odoo.addons.elkscharity.models.hr_attendance import (
+                _local_date,
+            )
             att_keys = set(
-                (a.employee_id.id, a.check_in.date() if a.check_in else False)
+                (a.employee_id.id,
+                 _local_date(self.env, a.check_in) if a.check_in else False)
                 for a in task_att
             )
             ts_kept = task_ts.filtered(

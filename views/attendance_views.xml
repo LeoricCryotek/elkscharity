@@ -174,6 +174,42 @@
         </field>
     </record>
 
+    <!-- Audit: charity attendance rows flagged Non-Elk Helper.
+         Read-only diagnostic — surfaces every attendance where
+         x_is_helper=True so the Secretary can see WHY the elks.org
+         report shows Helper columns.  User inspects and (if wrong)
+         opens the row and unchecks the "Non-Elk Helper" box.
+         Contributions rebuild automatically on that write via the
+         _CHARITY_TRIGGER_FIELDS hook in hr_attendance.py. -->
+    <record id="action_charity_attendance_helper_audit"
+            model="ir.actions.act_window">
+        <field name="name">Non-Elk Helper Audit</field>
+        <field name="res_model">hr.attendance</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('x_is_helper', '=', True),
+        ]</field>
+        <field name="context">{
+            'search_default_group_by_employee': 1,
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No attendance rows flagged as Non-Elk Helper
+            </p>
+            <p>
+                Every attendance row here has the <em>Non-Elk Helper</em>
+                checkbox turned on, which makes elks.org report the
+                hours in the Helper columns instead of the Elks columns.
+            </p>
+            <p>
+                If a row shouldn't be a helper — open it and uncheck
+                <em>Non-Elk Helper</em>.  The linked contribution
+                rebuilds automatically on save, and the next Sync
+                will push the corrected numbers to elks.org.
+            </p>
+        </field>
+    </record>
+
     <!-- Bulk: reset charity hours to raw clock-in→clock-out duration
          (for historical records that got the old worked_hours default
          and are now undercounted because Odoo subtracted lunch breaks). -->

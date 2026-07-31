@@ -18,10 +18,43 @@ double-counted if a timesheet line also exists for the same activity.
 """
 import logging
 
+import pytz
+
 from odoo import api, fields, models, _
 
 _logger = logging.getLogger(__name__)
 from odoo.exceptions import UserError
+
+
+def _local_date(env, dt):
+    """Return the LOCAL date for a naive-UTC Odoo datetime, using
+    the company's timezone.
+
+    Fixes 19.0.7.12: Odoo stores check_in as naive-UTC.  Calling
+    dt.date() directly rolls evening attendance (e.g. 5:37 PM Pacific
+    → 00:37 UTC next day) into the following calendar day, which
+    then becomes the contribution's event_date and the elks.org
+    Program Date.  Users in Idaho reporting a Jun 3 evening event
+    saw it appear on the Jun 4 line of the Grand Lodge report.
+
+    Company timezone is the right anchor because the report is about
+    the LODGE's charitable activity, not any one user's tz preference.
+    Falls back to user tz, then UTC, if the company hasn't set one.
+    """
+    if not dt:
+        return None
+    tz_name = (
+        (env.company.partner_id.tz if env.company.partner_id else None)
+        or env.company.resource_calendar_id.tz
+        or env.user.tz
+        or 'UTC'
+    )
+    try:
+        tz = pytz.timezone(tz_name)
+    except Exception:
+        tz = pytz.UTC
+    # Odoo datetimes are stored naive but represent UTC.
+    return pytz.UTC.localize(dt).astimezone(tz).date()
 
 
 class HrAttendance(models.Model):
@@ -273,7 +306,7 @@ class HrAttendance(models.Model):
         for att in self:
             if not att.x_charity_task_id or not att.check_in:
                 continue
-            att_date = att.check_in.date()
+            att_date = _local_date(self.env, att.check_in)
             matching_prs = AAL.search([
                 ("task_id", "=", att.x_charity_task_id.id),
                 ("employee_id", "=", att.employee_id.id),
@@ -366,12 +399,13 @@ class HrAttendance(models.Model):
         Att = self.env["hr.attendance"].sudo()
 
         # Bucket the current recordset by (task, event_date) so we
-        # touch each contribution once per save cycle.
+        # touch each contribution once per save cycle.  Use LOCAL
+        # (company-tz) date, not UTC — see _local_date() docstring.
         buckets = {}  # {(task_id, date): [attendance_id, ...]}
         for a in self:
             if not a.x_charity_task_id or not a.check_in:
                 continue
-            key = (a.x_charity_task_id.id, a.check_in.date())
+            key = (a.x_charity_task_id.id, _local_date(self.env, a.check_in))
             buckets.setdefault(key, [])
             buckets[key].append(a.id)
 
@@ -403,7 +437,8 @@ class HrAttendance(models.Model):
                 ("x_validated", "=", True),
                 ("check_out", "!=", False),
             ]).filtered(
-                lambda a: a.check_in and a.check_in.date() == event_date
+                lambda a: a.check_in and
+                          _local_date(self.env, a.check_in) == event_date
             )
             if not same_bucket:
                 continue

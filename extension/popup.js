@@ -208,7 +208,7 @@ async function renderPurgeProgress() {
         return;
     }
 
-    // ── IN-PROGRESS: live status + optional progress bar ────────
+    // ── IN-PROGRESS: live status + optional progress bar + Stop ──
     const pct = purgeStatus.total
         ? Math.round((purgeStatus.current / purgeStatus.total) * 100)
         : 0;
@@ -220,15 +220,43 @@ async function renderPurgeProgress() {
             `<div style="width:${pct}%; height:100%; ` +
             'background:#6a2020;"></div></div>';
     }
+    // Show Stop button during any in-progress phase.  "error" and
+    // "done" don't show it (nothing to stop).
+    const activePhases = ["scanning", "planning", "deleting",
+                           "verifying", "sync_push", "sync_between",
+                           "pushing"];
+    let stopBtn = "";
+    if (activePhases.includes(purgeStatus.phase)) {
+        stopBtn =
+            '<button id="purge-stop" style="margin-top:6px; ' +
+            'padding:4px 10px; font-size:11px; font-weight:600; ' +
+            'background:#c33; color:#fff; border:1px solid #a22; ' +
+            'border-radius:3px; cursor:pointer;">⏹ Stop</button>';
+    }
     box.innerHTML =
-        '<div style="font-weight:600; font-size:11px; ' +
-        'text-transform:uppercase; color:#6a2020;">' +
-        esc(purgeStatus.phase || "purge") +
+        '<div style="display:flex; justify-content:space-between; ' +
+        'align-items:center;">' +
+            '<div style="font-weight:600; font-size:11px; ' +
+            'text-transform:uppercase; color:#6a2020;">' +
+                esc(purgeStatus.phase || "purge") +
+            '</div>' +
         '</div>' +
         '<div style="font-size:12px; margin-top:2px;">' +
-        esc(purgeStatus.message || "") +
+            esc(purgeStatus.message || "") +
         '</div>' +
-        bar;
+        bar +
+        stopBtn;
+    // Wire the Stop button — sets stopRequested=true; the running
+    // pollAndPush/purgeDuplicates loops check it before each iteration
+    // and break out cleanly (cooperative cancel, no forced abort).
+    const stopEl = document.getElementById("purge-stop");
+    if (stopEl) {
+        stopEl.addEventListener("click", () => {
+            stopEl.textContent = "Stopping…";
+            stopEl.disabled = true;
+            chrome.storage.local.set({stopRequested: true});
+        });
+    }
 }
 
 // Renders the edit-page HTML sample panel used when delete-button

@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ============================================================================
+     === HUMAN ===
+     Volunteer Records Form — one printable page per contribution, laid out
+     for physical filing in the lodge's volunteer records file cabinet.
+     Each page has:
+       - Lodge header (logo + name + number)
+       - Event info (date, program, GL category, recipient organization)
+       - BPOE Columns A-J data (head count, elks, helpers, hours, miles, $)
+       - Volunteer roster — every attendance + PR line contributing hours
+       - Notes (typed and space for handwritten)
+       - Sign-off block (Secretary signature + date)
+     Bound to elks.charity.contribution — Print dropdown → "Volunteer Records
+     Form".  Select one or many rows in the list view before printing.
+     === AI AGENT ===
+     Uses page-break-before: always on every card except the first so each
+     contribution gets its own physical sheet.  Volunteer roster pulls from
+     account_analytic_line filtered on the linked task+date, so it works
+     for both attendance-sourced and Quick Entry-sourced contributions.
+     ============================================================================ -->
+<odoo>
+
+    <record id="action_report_volunteer_records_form"
+            model="ir.actions.report">
+        <field name="name">Volunteer Records Form</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">elkscharity.report_volunteer_records_form</field>
+        <field name="report_file">elkscharity.report_volunteer_records_form</field>
+        <field name="print_report_name">
+            'Volunteer_Records_%d_contribution(s)' % (len(docs))
+        </field>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="base.paperformat_us"/>
+    </record>
+
+    <!-- Same report as HTML for on-screen preview before printing. -->
+    <record id="action_report_volunteer_records_form_html"
+            model="ir.actions.report">
+        <field name="name">Volunteer Records Form (Preview)</field>
+        <field name="model">elks.charity.contribution</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">elkscharity.report_volunteer_records_form</field>
+        <field name="report_file">elkscharity.report_volunteer_records_form</field>
+        <field name="print_report_name">
+            'Volunteer_Records_%d_contribution(s)' % (len(docs))
+        </field>
+        <field name="binding_model_id" ref="model_elks_charity_contribution"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <!-- One page per contribution.  Uses page-break-before: always so
+         each card starts on a fresh sheet suitable for physical filing. -->
+    <template id="report_volunteer_records_form">
+        <t t-call="web.html_container">
+            <t t-set="settings"
+               t-value="docs.env['elks.lodge.settings'].sudo().search([], limit=1)"/>
+            <t t-foreach="docs" t-as="c">
+                <t t-set="cat" t-value="c.charity_category_id"/>
+                <t t-set="task" t-value="c.task_id"/>
+                <!-- Roster: attendance + PR analytic lines contributing to
+                     this task on this date.  x_personal_record covers both
+                     Quick Entry and portal submissions; the attendance
+                     table is joined via employee_id + date match. -->
+                <t t-set="pr_lines"
+                   t-value="c.env['account.analytic.line'].sudo().search([
+                       ('task_id', '=', task.id if task else False),
+                       ('date', '=', c.contribution_date),
+                       ('x_personal_record', '=', True),
+                   ]) if task else c.env['account.analytic.line']"/>
+                <t t-set="atts"
+                   t-value="c.env['hr.attendance'].sudo().search([
+                       ('x_charity_task_id', '=', task.id if task else False),
+                       ('x_validated', '=', True),
+                       ('check_out', '!=', False),
+                   ]).filtered(
+                       lambda a: a.check_in
+                   ) if task else c.env['hr.attendance']"/>
+
+                <div class="page"
+                     style="font-family: Arial, sans-serif; font-size: 12px;
+                            page-break-before: always;">
+
+                    <!-- ===== LODGE HEADER ===== -->
+                    <table style="width: 100%; margin-bottom: 8px; border: none;">
+                        <tr>
+                            <td style="width: 15%; text-align: center;
+                                       vertical-align: middle; border: none;
+                                       padding: 0;">
+                                <t t-if="settings and settings.logo_primary">
+                                    <img t-att-src="image_data_uri(settings.logo_primary)"
+                                         style="max-height: 70px; max-width: 90px;"
+                                         alt="Elks USA"/>
+                                </t>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;
+                                       border: none; padding: 0 10px;">
+                                <h2 style="font-size: 20px; margin: 0 0 2px 0;
+                                           color: #333;">
+                                    <t t-if="settings and settings.name">
+                                        <span t-field="settings.name"/>
+                                    </t>
+                                    <t t-else="">Elks Lodge</t>
+                                    <t t-if="settings and settings.lodge_number">
+                                        #<span t-field="settings.lodge_number"/>
+                                    </t>
+                                </h2>
+                                <p style="color: #777; font-size: 10px; margin: 0;">
+                                    Benevolent and Protective Order of Elks
+                                </p>
+                                <h3 style="font-size: 15px; margin: 6px 0 0 0;
+                                           color: #6a2020;">
+                                    Volunteer Records Form
+                                </h3>
+                            </td>
+                            <td style="width: 15%; text-align: center;
+                                       vertical-align: middle; border: none;
+                                       padding: 0;">
+                                <t t-if="settings and settings.logo_lodge">
+                                    <img t-att-src="image_data_uri(settings.logo_lodge)"
+                                         style="max-height: 70px; max-width: 90px;"
+                                         alt="Lodge Logo"/>
+                                </t>
+                            </td>
+                        </tr>
+                    </table>
+                    <div style="border-top: 2px solid #6a2020;
+                                margin-bottom: 14px;"/>
+
+                    <!-- ===== SECTION 1: EVENT INFO ===== -->
+                    <div style="border: 1px solid #999; border-radius: 4px;
+                                margin-bottom: 12px;">
+                        <div style="background-color: #6a2020; color: white;
+                                    padding: 5px 10px;
+                                    border-radius: 3px 3px 0 0;
+                                    font-size: 12px; font-weight: bold;">
+                            Event Information
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse;
+                                      font-size: 12px;">
+                            <tr>
+                                <td style="width: 20%; padding: 5px 10px;
+                                           background-color: #f8f8f8;">
+                                    <strong>Program Date</strong>
+                                </td>
+                                <td style="width: 30%; padding: 5px 10px;">
+                                    <t t-out="c.contribution_date"/>
+                                </td>
+                                <td style="width: 20%; padding: 5px 10px;
+                                           background-color: #f8f8f8;">
+                                    <strong>GL Category</strong>
+                                </td>
+                                <td style="width: 30%; padding: 5px 10px;">
+                                    <t t-if="cat">
+                                        [<t t-out="cat.code"/>]
+                                        <t t-out="cat.name"/>
+                                    </t>
+                                    <t t-else="">
+                                        <em>Uncategorized</em>
+                                    </t>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 5px 10px;
+                                           background-color: #f8f8f8;">
+                                    <strong>Program Name</strong>
+                                </td>
+                                <td colspan="3" style="padding: 5px 10px;">
+                                    <t t-out="c.name"/>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 5px 10px;
+                                           background-color: #f8f8f8;">
+                                    <strong>Recipient</strong>
+                                </td>
+                                <td colspan="3" style="padding: 5px 10px;">
+                                    <t t-if="c.recipient_org">
+                                        <t t-out="c.recipient_org"/>
+                                    </t>
+                                    <t t-else="">
+                                        <span style="color: #999;">—</span>
+                                    </t>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 5px 10px;
+                                           background-color: #f8f8f8;">
+                                    <strong>Charity Activity</strong>
+                                </td>
+                                <td colspan="3" style="padding: 5px 10px;">
+                                    <t t-if="task">
+                                        <t t-out="task.name"/>
+                                    </t>
+                                    <t t-else="">
+                                        <span style="color: #999;">—</span>
+                                    </t>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- ===== SECTION 2: BPOE COUNTS (A-J) ===== -->
+                    <div style="border: 1px solid #999; border-radius: 4px;
+                                margin-bottom: 12px;">
+                        <div style="background-color: #6a2020; color: white;
+                                    padding: 5px 10px;
+                                    border-radius: 3px 3px 0 0;
+                                    font-size: 12px; font-weight: bold;">
+                            Grand Lodge Report Data — Columns A through J
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse;
+                                      font-size: 12px;">
+                            <tr style="background-color: #f0e68c;">
+                                <td style="padding: 4px 8px; text-align: center;
+                                           font-weight: bold;" colspan="3">
+                                    Headcount
+                                </td>
+                                <td style="padding: 4px 8px; text-align: center;
+                                           font-weight: bold;
+                                           background-color: #faebd7;"
+                                    colspan="2">Hours</td>
+                                <td style="padding: 4px 8px; text-align: center;
+                                           font-weight: bold;
+                                           background-color: #ffd5d5;"
+                                    colspan="2">Miles</td>
+                                <td style="padding: 4px 8px; text-align: center;
+                                           font-weight: bold;
+                                           background-color: #d2ffd2;"
+                                    colspan="2">Donations</td>
+                            </tr>
+                            <tr style="font-size: 10px; color: #333;">
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #f8ecc0;">
+                                    (B) Participants
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #f8ecc0;">
+                                    (C) # Elks
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #f8ecc0;">
+                                    (D) # Helpers
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #fdefdc;">
+                                    (E) Elk Hrs
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #fdefdc;">
+                                    (F) Helper Hrs
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #ffeaea;">
+                                    (G) Elk Miles
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #ffeaea;">
+                                    (H) Helper Miles
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #e6f9e6;">
+                                    (I) Non-Cash
+                                </td>
+                                <td style="padding: 3px 8px; text-align: center;
+                                           background-color: #e6f9e6;">
+                                    (J) Cash
+                                </td>
+                            </tr>
+                            <tr style="font-size: 15px; font-weight: bold;">
+                                <td style="padding: 8px; text-align: center;">
+                                    <t t-out="c.head_count or 0"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <t t-out="c.elks_count or 0"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <t t-out="c.helper_count or 0"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <t t-out="'%.1f' % (c.elks_hours or 0)"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <t t-out="'%.1f' % (c.helper_hours or 0)"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <t t-out="'%.0f' % (c.elks_miles or 0)"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <t t-out="'%.0f' % (c.helper_miles or 0)"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    $<t t-out="'%.2f' % (c.non_cash_value or 0)"/>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    $<t t-out="'%.2f' % (c.cash_value or 0)"/>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- ===== SECTION 3: VOLUNTEER ROSTER ===== -->
+                    <div style="border: 1px solid #999; border-radius: 4px;
+                                margin-bottom: 12px;">
+                        <div style="background-color: #6a2020; color: white;
+                                    padding: 5px 10px;
+                                    border-radius: 3px 3px 0 0;
+                                    font-size: 12px; font-weight: bold;">
+                            Volunteer Roster
+                        </div>
+                        <t t-if="atts or pr_lines">
+                            <table style="width: 100%;
+                                          border-collapse: collapse;
+                                          font-size: 11px;">
+                                <thead>
+                                    <tr style="background-color: #f8f8f8;
+                                               font-size: 10px;
+                                               text-transform: uppercase;
+                                               color: #666;">
+                                        <th style="padding: 5px 10px;
+                                                   text-align: left;
+                                                   border-bottom: 1px solid #ccc;">
+                                            Volunteer
+                                        </th>
+                                        <th style="padding: 5px 10px;
+                                                   text-align: center;
+                                                   border-bottom: 1px solid #ccc;">
+                                            Role
+                                        </th>
+                                        <th style="padding: 5px 10px;
+                                                   text-align: right;
+                                                   border-bottom: 1px solid #ccc;">
+                                            Hours
+                                        </th>
+                                        <th style="padding: 5px 10px;
+                                                   text-align: right;
+                                                   border-bottom: 1px solid #ccc;">
+                                            Miles
+                                        </th>
+                                        <th style="padding: 5px 10px;
+                                                   text-align: left;
+                                                   border-bottom: 1px solid #ccc;">
+                                            Source
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Attendance rows -->
+                                    <t t-foreach="atts" t-as="a">
+                                        <tr>
+                                            <td style="padding: 4px 10px;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-out="a.employee_id.name"/>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       text-align: center;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-if="a.x_is_helper">
+                                                    <span style="color: #cc7000;">
+                                                        Helper
+                                                    </span>
+                                                </t>
+                                                <t t-else="">
+                                                    <span style="color: #0a5d0a;">
+                                                        Elk
+                                                    </span>
+                                                </t>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       text-align: right;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-out="'%.2f' % (a.x_charity_hours or 0)"/>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       text-align: right;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-out="'%.0f' % (a.x_miles or 0)"/>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       border-bottom: 1px solid #eee;
+                                                       color: #666; font-size: 10px;">
+                                                Clock-in
+                                                <t t-if="a.check_in">
+                                                    · <t t-out="a.check_in"/>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                    <!-- Personal-record lines (Quick Entry / portal) -->
+                                    <t t-foreach="pr_lines" t-as="pr">
+                                        <tr>
+                                            <td style="padding: 4px 10px;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-out="pr.employee_id.name
+                                                          if pr.employee_id
+                                                          else pr.user_id.name"/>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       text-align: center;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-if="pr.x_is_helper">
+                                                    <span style="color: #cc7000;">
+                                                        Helper
+                                                    </span>
+                                                </t>
+                                                <t t-else="">
+                                                    <span style="color: #0a5d0a;">
+                                                        Elk
+                                                    </span>
+                                                </t>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       text-align: right;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-out="'%.2f' % (pr.unit_amount or 0)"/>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       text-align: right;
+                                                       border-bottom: 1px solid #eee;">
+                                                <t t-out="'%.0f' % (pr.x_miles or 0)"/>
+                                            </td>
+                                            <td style="padding: 4px 10px;
+                                                       border-bottom: 1px solid #eee;
+                                                       color: #666; font-size: 10px;">
+                                                Personal record
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </t>
+                        <t t-else="">
+                            <p style="padding: 10px; color: #999;
+                                      text-align: center; margin: 0;">
+                                <em>No individual volunteer records — totals
+                                only.</em>
+                            </p>
+                        </t>
+                    </div>
+
+                    <!-- ===== SECTION 4: NOTES ===== -->
+                    <div style="border: 1px solid #999; border-radius: 4px;
+                                margin-bottom: 12px;">
+                        <div style="background-color: #6a2020; color: white;
+                                    padding: 5px 10px;
+                                    border-radius: 3px 3px 0 0;
+                                    font-size: 12px; font-weight: bold;">
+                            Notes
+                        </div>
+                        <div style="padding: 10px; min-height: 60px;
+                                    font-size: 11px;">
+                            <t t-if="c.notes">
+                                <p style="margin: 0 0 8px 0; white-space: pre-wrap;">
+                                    <t t-out="c.notes"/>
+                                </p>
+                            </t>
+                            <t t-else="">
+                                <div style="min-height: 40px;
+                                            border-bottom: 1px solid #ddd;
+                                            margin-bottom: 8px;"/>
+                                <div style="min-height: 20px;
+                                            border-bottom: 1px solid #ddd;"/>
+                            </t>
+                        </div>
+                    </div>
+
+                    <!-- ===== SECTION 5: SIGN-OFF ===== -->
+                    <div style="border: 1px solid #999; border-radius: 4px;">
+                        <div style="background-color: #6a2020; color: white;
+                                    padding: 5px 10px;
+                                    border-radius: 3px 3px 0 0;
+                                    font-size: 12px; font-weight: bold;">
+                            Verification &amp; Sign-Off
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse;
+                                      font-size: 11px;">
+                            <tr>
+                                <td style="width: 50%; padding: 10px;
+                                           vertical-align: top;">
+                                    <strong>Submitted By:</strong>
+                                    <t t-if="c.submitted_by">
+                                        <span style="margin-left: 6px;">
+                                            <t t-out="c.submitted_by.name"/>
+                                        </span>
+                                    </t>
+                                    <t t-else="">
+                                        <span style="display: inline-block;
+                                                     border-bottom: 1px solid #333;
+                                                     min-width: 180px;
+                                                     margin-left: 6px;">&#160;</span>
+                                    </t>
+                                    <br/>
+                                    <br/>
+                                    <strong>Confirmed By:</strong>
+                                    <t t-if="c.confirmed_by">
+                                        <span style="margin-left: 6px;">
+                                            <t t-out="c.confirmed_by.name"/>
+                                            <t t-if="c.confirmed_date">
+                                                · <t t-out="c.confirmed_date"/>
+                                            </t>
+                                        </span>
+                                    </t>
+                                    <t t-else="">
+                                        <span style="display: inline-block;
+                                                     border-bottom: 1px solid #333;
+                                                     min-width: 180px;
+                                                     margin-left: 6px;">&#160;</span>
+                                    </t>
+                                </td>
+                                <td style="width: 50%; padding: 10px;
+                                           vertical-align: top;">
+                                    <strong>Secretary Signature:</strong>
+                                    <div style="border-bottom: 1px solid #333;
+                                                margin-top: 24px;"/>
+                                    <br/>
+                                    <strong>Date:</strong>
+                                    <span style="display: inline-block;
+                                                 border-bottom: 1px solid #333;
+                                                 min-width: 180px;
+                                                 margin-left: 6px;">&#160;</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="margin-top: 12px; text-align: center;
+                                color: #999; font-size: 9px;">
+                        elks.org submission status:
+                        <strong>
+                            <t t-out="dict(c._fields['x_elks_org_state'].selection).get(
+                                c.x_elks_org_state, c.x_elks_org_state or '—')"/>
+                        </strong>
+                        · Contribution ID #<t t-out="c.id"/>
+                        · Printed for volunteer records file
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+</odoo>

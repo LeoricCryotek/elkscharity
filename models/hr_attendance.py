@@ -220,8 +220,73 @@ class HrAttendance(models.Model):
         if task_ids:
             task_ids._compute_totals()
 
+    def _default_helper_from_membership(self, vals_list):
+        """Auto-set x_is_helper=True on new charity attendance rows
+        whose employee isn't a current Elk member.
+
+        Membership source of truth is elkscontacts: the res.partner
+        record with x_volunteer_employee_id = employee.id has a
+        stored-computed x_is_member field.  If that partner exists
+        and is a current member → default helper=False (Elk).  If
+        no linked partner OR partner is not a member → default
+        helper=True.
+
+        Only applied when the caller did NOT explicitly set
+        x_is_helper in vals — so explicit True/False from imports,
+        the Quick Entry wizard, or bulk actions is always respected.
+        Prevents accidents like the July 2026 import that saved all
+        rows as helpers even though the CSV said False.
+        """
+        # Collect employee IDs we need to look up (only for rows
+        # missing x_is_helper AND tagged as charity).
+        emp_ids = set()
+        for vals in vals_list:
+            if 'x_is_helper' in vals:
+                continue
+            if not vals.get('x_charity_task_id'):
+                continue
+            if vals.get('employee_id'):
+                emp_ids.add(vals['employee_id'])
+        if not emp_ids:
+            return
+        # Batch-lookup: {employee_id: is_elk_member_bool}
+        Partner = self.env['res.partner'].sudo()
+        # x_is_member is only present when the elkscontacts module is
+        # installed.  Fall back to "unknown → Elk" if the field is
+        # missing so we never crash on a stripped-down install.
+        if 'x_volunteer_employee_id' not in Partner._fields:
+            return
+        member_status = {}
+        partners = Partner.search([
+            ('x_volunteer_employee_id', 'in', list(emp_ids)),
+        ])
+        for p in partners:
+            emp_id = p.x_volunteer_employee_id.id
+            is_elk = bool(getattr(p, 'x_is_member', False))
+            # If multiple partners link to the same employee, prefer
+            # the one that IS a member (safest — avoids demoting a
+            # dues-paying Elk because a stale duplicate contact
+            # points at their employee record).
+            member_status[emp_id] = member_status.get(emp_id) or is_elk
+        # Apply defaults to the vals that need them.
+        for vals in vals_list:
+            if 'x_is_helper' in vals:
+                continue
+            if not vals.get('x_charity_task_id'):
+                continue
+            emp_id = vals.get('employee_id')
+            if not emp_id:
+                continue
+            # Not in member_status = no linked contact at all.
+            is_elk = member_status.get(emp_id, False)
+            vals['x_is_helper'] = not is_elk
+
     @api.model_create_multi
     def create(self, vals_list):
+        # Auto-classify Non-Elk Helper from linked contact BEFORE
+        # super().create() so the stored field is correct on first
+        # save (contribution totals downstream read it as-is).
+        self._default_helper_from_membership(vals_list)
         records = super().create(vals_list)
         charity_records = records.filtered('x_charity_task_id')
         if charity_records:

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_attendance_import_wizard_form" model="ir.ui.view">
+        <field name="name">elks.charity.attendance.import.wizard.form</field>
+        <field name="model">elks.charity.attendance.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import Volunteer Hours">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Import Volunteer Hours</h1>
+                        <p class="text-muted">
+                            Paste a monthly volunteer timesheet (from an
+                            email, spreadsheet, or handwritten log typed
+                            up) and the wizard will parse it into
+                            attendance records tagged for the specified
+                            charity activity.  A contribution auto-
+                            generates for each (task, date) so the
+                            Elks.org push queue picks them up on the
+                            next Sync.
+                        </p>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="employee_id"
+                                   options="{'no_create_edit': False}"/>
+                            <field name="charity_task_id"
+                                   options="{'no_create_edit': False}"/>
+                        </group>
+                        <group>
+                            <field name="is_helper"/>
+                            <field name="default_year"/>
+                        </group>
+                    </group>
+                    <group string="Timesheet">
+                        <field name="raw_data" nolabel="1"
+                               placeholder="Paste the timesheet here.  Example:
+
+July 2026
+
+Date      Shift 1        Shift 2        Total Hours
+July 2    2:00 – 3:30    4:50 – 6:30    3h 10m
+July 3    12:40 – 4:30   4:55 – 9:00    7h 55m
+July 5    4:55 – 5:30    —              0h 35m
+TOTAL                                   64h 40m"
+                               style="min-height: 180px; font-family: monospace;"/>
+                    </group>
+                    <group string="Preview">
+                        <field name="preview_html" nolabel="1"
+                               widget="html" readonly="1"/>
+                        <field name="preview_row_count" invisible="1"/>
+                        <field name="preview_warnings" invisible="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_preview"
+                            string="Refresh Preview"
+                            type="object" class="btn-secondary"/>
+                    <button name="action_import"
+                            string="Import Rows"
+                            type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_attendance_import_wizard"
+            model="ir.actions.act_window">
+        <field name="name">Import Volunteer Hours</field>
+        <field name="res_model">elks.charity.attendance.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

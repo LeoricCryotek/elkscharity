@@ -7,3 +7,4 @@ from . import grand_lodge_report_wizard
 from . import charity_annual_report_wizard
 from . import quick_entry_wizard
 from . import elks_org_setup_wizard
+from . import attendance_import_wizard

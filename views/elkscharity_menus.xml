@@ -224,4 +224,13 @@ action = {
               parent="menu_elkscharity_config"
               action="action_rebuild_attendance_contributions"
               sequence="90"/>
+
+    <!-- Paste-a-timesheet import wizard for volunteer-hours emails.
+         Under Configuration since it's a bulk-import tool the
+         Secretary reaches for occasionally, not day-to-day. -->
+    <menuitem id="menu_elkscharity_import_hours"
+              name="Import Volunteer Hours"
+              parent="menu_elkscharity_config"
+              action="action_attendance_import_wizard"
+              sequence="20"/>
 </odoo>

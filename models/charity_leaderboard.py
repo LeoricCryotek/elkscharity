@@ -71,8 +71,16 @@ class ElksCharityLeaderboard(models.AbstractModel):
         return name
 
     @api.model
+    def range_label(self, start, end):
+        """A human label for a date window, e.g. 'Jun 1 – Aug 10, 2026'."""
+        s, e = self._coerce_date(start), self._coerce_date(end)
+        left = ("%s %d" % (s.strftime("%b"), s.day)
+                if s.year == e.year else "%s %d, %d" % (s.strftime("%b"), s.day, s.year))
+        return "%s – %s %d, %d" % (left, e.strftime("%b"), e.day, e.year)
+
+    @api.model
     def get_leaderboard(self, period="month", ref_date=None, limit=10,
-                        name_mode="full"):
+                        name_mode="full", start=None, end=None):
         """Ranked volunteer hours by Elk member.
 
         period    : 'month' (calendar month of ref_date) or 'lodge_year'
@@ -80,16 +88,23 @@ class ElksCharityLeaderboard(models.AbstractModel):
         ref_date  : date or 'YYYY-MM-DD' string; defaults to today.
         limit     : max rows (10 = 1st..10th place).
         name_mode : 'full' or 'initial'.
+        start/end : if either is given, rank over that explicit date window
+                    (inclusive) instead of period/ref_date — for a custom range.
         Returns an ordered list of dicts:
             {rank, name, hours, employee_id, partner_id, period_label}
         """
-        ref_date = self._coerce_date(ref_date)
-
         domain = [("is_helper", "=", False)]  # Elks only, not helper hours
-        if period == "lodge_year":
+        if start or end:
+            s = self._coerce_date(start) if start else fields.Date.to_date("1900-01-01")
+            e = self._coerce_date(end) if end else fields.Date.to_date("2999-12-31")
+            domain += [("date", ">=", s), ("date", "<=", e)]
+            period_label = self.range_label(s, e)
+        elif period == "lodge_year":
+            ref_date = self._coerce_date(ref_date)
             period_label = _lodge_year_str(ref_date)
             domain.append(("lodge_year", "=", period_label))
         else:
+            ref_date = self._coerce_date(ref_date)
             first = ref_date.replace(day=1)
             last = ref_date.replace(
                 day=calendar.monthrange(ref_date.year, ref_date.month)[1])

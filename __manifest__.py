@@ -114,6 +114,7 @@ portal, elkscontacts, elksfrs
         "wizard/charity_annual_report_wizard_views.xml",
         "wizard/elks_org_setup_wizard_views.xml",
         "wizard/attendance_import_wizard_views.xml",
+        "wizard/bulk_enable_volunteer_wizard_views.xml",
         "report/charity_annual_report.xml",
         "report/grand_lodge_report.xml",
         "report/gl_entry_sheet_report.xml",

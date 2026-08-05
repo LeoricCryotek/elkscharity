@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_elks_bulk_enable_volunteer_wizard_form"
+            model="ir.ui.view">
+        <field name="name">elks.bulk.enable.volunteer.wizard.form</field>
+        <field name="model">elks.bulk.enable.volunteer.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Bulk Enable Volunteer + Default Charity">
+                <div class="alert alert-info" role="alert">
+                    <i class="fa fa-info-circle" title="Info"/>
+                    Flip the <b>Volunteer</b> flag on Elks members in bulk
+                    and (optionally) set their <b>Default Charity Activity</b>
+                    in one pass. Setting the default means new attendance
+                    check-ins are auto-tagged to that activity so volunteers
+                    don't have to categorize their own hours.
+                </div>
+
+                <group>
+                    <field name="scope"/>
+                    <field name="include_already_volunteer"/>
+                    <field name="partner_count" readonly="1"/>
+                </group>
+
+                <group string="Default Charity Activity (optional)">
+                    <field name="default_charity_task_id"
+                           options="{'no_create_edit': True}"/>
+                    <field name="override_existing_default"
+                           invisible="not default_charity_task_id"/>
+                </group>
+
+                <div class="alert alert-warning"
+                     role="alert"
+                     invisible="partner_count == 0">
+                    This will affect
+                    <b><field name="partner_count"
+                              readonly="1" nolabel="1"
+                              class="oe_inline"/></b>
+                    partner(s). Double-check the scope before clicking Apply.
+                </div>
+
+                <footer>
+                    <button name="action_apply"
+                            string="Apply" type="object"
+                            class="btn-primary"
+                            confirm="Flip the volunteer flag (and optionally set the default charity) on all partners in scope? This cannot be undone in a single click — you'd have to reverse individually."/>
+                    <button string="Cancel" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action opened from the menu (all Elks scope by default). -->
+    <record id="action_elks_bulk_enable_volunteer_wizard"
+            model="ir.actions.act_window">
+        <field name="name">Bulk Enable Volunteer + Set Default Charity</field>
+        <field name="res_model">elks.bulk.enable.volunteer.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Server action bound to res.partner so it appears in the
+         list-view Actions dropdown. Passes active_ids via context
+         and defaults the wizard to "Selected records" scope. -->
+    <record id="ir_actions_server_bulk_enable_volunteer"
+            model="ir.actions.server">
+        <field name="name">Bulk Enable Volunteer + Set Default Charity</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Bulk Enable Volunteer + Set Default Charity',
+    'res_model': 'elks.bulk.enable.volunteer.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': {
+        'default_scope': 'selected',
+        'active_ids': records.ids if records else [],
+        'active_model': 'res.partner',
+    },
+}
+        </field>
+    </record>
+
+    <!-- Menu entry under the existing Contacts → Actions submenu
+         (elkscontacts.elks_menu_actions). Places it near the other
+         bulk operations for discoverability. -->
+    <menuitem id="menu_bulk_enable_volunteer"
+              name="Bulk Enable Volunteer + Default Charity"
+              parent="elkscontacts.elks_menu_actions"
+              action="action_elks_bulk_enable_volunteer_wizard"
+              sequence="60"/>
+</odoo>

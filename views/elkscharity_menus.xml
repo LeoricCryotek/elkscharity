@@ -280,4 +280,65 @@ action = {
               sequence="45"
               groups="group_elkscharity_secretary"/>
 
+    <!-- Import Contributions — dedicated act_window on
+         elks.charity.contribution with Import Records enabled +
+         a help panel listing every BPOE A-J column so the Secretary
+         has one canonical place to bulk-import Prepare Submission
+         data.  Placed under Contributions so it's grouped with the
+         other contribution management screens. -->
+    <record id="action_charity_contributions_import"
+            model="ir.actions.act_window">
+        <field name="name">Import Contributions</field>
+        <field name="res_model">elks.charity.contribution</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{
+            'default_contribution_type': 'service',
+            'default_state': 'confirmed',
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Bulk-import Prepare Submissions
+            </p>
+            <p>
+                Click <em>⚙ → Import Records</em> above.  One CSV row =
+                one contribution (equivalent to one Prepare Submission).
+                Match the paper Data Collection Survey fields.
+            </p>
+            <p><strong>CSV columns (headers):</strong></p>
+            <ul>
+                <li><code>name</code> — description shown on the row</li>
+                <li><code>contribution_date</code> — the event/program date</li>
+                <li><code>task_id</code> — Charity Activity name (must exist)</li>
+                <li><code>contribution_type</code> — usually <code>service</code></li>
+                <li><code>head_count</code> — (B) Participants</li>
+                <li><code>elks_count</code> — (C) # Elks</li>
+                <li><code>helper_count</code> — (D) # Helpers</li>
+                <li><code>elks_hours</code> — (E) Total Elk Hours</li>
+                <li><code>helper_hours</code> — (F) Total Helper Hours</li>
+                <li><code>elks_miles</code> — (G) Elk Miles (round trip)</li>
+                <li><code>helper_miles</code> — (H) Helper Miles</li>
+                <li><code>non_cash_value</code> — (I) Non-Cash Value ($)</li>
+                <li><code>cash_value</code> — (J) Cash Donations ($)</li>
+                <li><code>state</code> — <code>confirmed</code> to skip Draft review</li>
+                <li><code>recipient_org</code> — optional receiving organization</li>
+                <li><code>notes</code> — optional Secretary notes</li>
+            </ul>
+            <p class="text-muted">
+                After import, run Sync (Push + Purge) in the Chrome
+                extension to send everything to elks.org.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu placed here (bottom of file) so the loader has seen the
+         action_charity_contributions_import record above.  Under
+         Contributions parent alongside the existing All/Pending/
+         Recurring/Push submenus. -->
+    <menuitem id="menu_elkscharity_contributions_import"
+              name="Import Contributions (CSV)"
+              parent="menu_elkscharity_contributions"
+              action="action_charity_contributions_import"
+              sequence="15"
+              groups="group_elkscharity_secretary"/>
+
 </odoo>

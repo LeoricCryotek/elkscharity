@@ -123,23 +123,6 @@
               sequence="27"
               groups="group_elkscharity_secretary"/>
 
-    <!-- Bulk import options moved to Hours (19.0.7.18) so they're
-         one click away when the Secretary is working with charity
-         hours, instead of buried under Configuration. -->
-    <menuitem id="menu_elkscharity_import_hours_under_hours"
-              name="Import Volunteer Hours (paste)"
-              parent="menu_elkscharity_hours"
-              action="action_attendance_import_wizard"
-              sequence="40"
-              groups="group_elkscharity_secretary"/>
-
-    <menuitem id="menu_elkscharity_import_pr_lines_under_hours"
-              name="Import Personal Records (CSV)"
-              parent="menu_elkscharity_hours"
-              action="action_charity_pr_lines_import"
-              sequence="45"
-              groups="group_elkscharity_secretary"/>
-
     <menuitem id="menu_elkscharity_wrapup"
               name="Year-End Wrap-Up"
               parent="menu_elkscharity_hours"
@@ -276,5 +259,25 @@ action = {
             </p>
         </field>
     </record>
+
+    <!-- Bulk import options placed under Hours (19.0.7.18) so they're
+         one click away when the Secretary is working with charity
+         hours, instead of buried under Configuration.  Menus defined
+         AFTER the action they reference so XML loads them in order —
+         the actions above are defined later in this file than the
+         Hours-parent menu block, so the menuitems live down here too. -->
+    <menuitem id="menu_elkscharity_import_hours_under_hours"
+              name="Import Volunteer Hours (paste)"
+              parent="menu_elkscharity_hours"
+              action="action_attendance_import_wizard"
+              sequence="40"
+              groups="group_elkscharity_secretary"/>
+
+    <menuitem id="menu_elkscharity_import_pr_lines_under_hours"
+              name="Import Personal Records (CSV)"
+              parent="menu_elkscharity_hours"
+              action="action_charity_pr_lines_import"
+              sequence="45"
+              groups="group_elkscharity_secretary"/>
 
 </odoo>

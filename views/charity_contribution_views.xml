@@ -73,6 +73,21 @@
                             <field name="head_count"/>
                             <field name="elks_count"/>
                             <field name="helper_count"/>
+                            <!-- 19.0.7.20: expose BPOE Columns E-H
+                                 (hours + miles) on the form itself so
+                                 the Prepare Submission / Recurring
+                                 Template form can be filled without
+                                 needing to run the Quick Entry wizard.
+                                 float_time widget shows HH:MM which
+                                 matches how the paper form is read. -->
+                            <field name="elks_hours" widget="float_time"
+                                   string="(E) Elk Hours"/>
+                            <field name="helper_hours" widget="float_time"
+                                   string="(F) Helper Hours"/>
+                            <field name="elks_miles"
+                                   string="(G) Elk Miles"/>
+                            <field name="helper_miles"
+                                   string="(H) Helper Miles"/>
                         </group>
                     </group>
 

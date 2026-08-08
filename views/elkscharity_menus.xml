@@ -123,6 +123,23 @@
               sequence="27"
               groups="group_elkscharity_secretary"/>
 
+    <!-- Bulk import options moved to Hours (19.0.7.18) so they're
+         one click away when the Secretary is working with charity
+         hours, instead of buried under Configuration. -->
+    <menuitem id="menu_elkscharity_import_hours_under_hours"
+              name="Import Volunteer Hours (paste)"
+              parent="menu_elkscharity_hours"
+              action="action_attendance_import_wizard"
+              sequence="40"
+              groups="group_elkscharity_secretary"/>
+
+    <menuitem id="menu_elkscharity_import_pr_lines_under_hours"
+              name="Import Personal Records (CSV)"
+              parent="menu_elkscharity_hours"
+              action="action_charity_pr_lines_import"
+              sequence="45"
+              groups="group_elkscharity_secretary"/>
+
     <menuitem id="menu_elkscharity_wrapup"
               name="Year-End Wrap-Up"
               parent="menu_elkscharity_hours"
@@ -225,12 +242,39 @@ action = {
               action="action_rebuild_attendance_contributions"
               sequence="90"/>
 
-    <!-- Paste-a-timesheet import wizard for volunteer-hours emails.
-         Under Configuration since it's a bulk-import tool the
-         Secretary reaches for occasionally, not day-to-day. -->
-    <menuitem id="menu_elkscharity_import_hours"
-              name="Import Volunteer Hours"
-              parent="menu_elkscharity_config"
-              action="action_attendance_import_wizard"
-              sequence="20"/>
+    <!-- Import Personal Records — dedicated act_window on
+         account.analytic.line filtered to charity personal-record
+         lines, with Import Records enabled.  The "All Charity Hours"
+         menu points at a SQL view (elks.charity.hours.report) which
+         can't accept imports; this fills that gap so the Secretary
+         can bulk-import per-Elk attribution CSVs from the ⚙ menu. -->
+    <record id="action_charity_pr_lines_import"
+            model="ir.actions.act_window">
+        <field name="name">Import Personal Records</field>
+        <field name="res_model">account.analytic.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('x_personal_record', '=', True),
+            ('project_id.x_is_charity_parent', '=', True),
+        ]</field>
+        <field name="context">{
+            'default_x_personal_record': True,
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No personal-record lines yet
+            </p>
+            <p>
+                Click <em>⚙ → Import Records</em> above to bulk-import
+                per-Elk attribution CSVs (leader hours per class,
+                mileage per volunteer, etc.).  Required columns:
+                <code>project_id</code>, <code>task_id</code>,
+                <code>employee_id</code>, <code>date</code>,
+                <code>name</code>, <code>unit_amount</code>,
+                <code>x_is_helper</code>, <code>x_personal_record</code>,
+                <code>x_miles</code>.
+            </p>
+        </field>
+    </record>
+
 </odoo>

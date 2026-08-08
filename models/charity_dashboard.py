@@ -96,6 +96,19 @@ class ElksCharityDashboard(models.Model):
     helper_unique = fields.Integer("# Unique Helpers", readonly=True)
     elks_headcount = fields.Integer("Elks Head Count", readonly=True)
     helper_headcount = fields.Integer("Helper Head Count", readonly=True)
+    # 19.0.7.22: BPOE Column B (Participants) — the "People Served"
+    # number.  Prior dashboards summed elks_headcount+helper_headcount
+    # for the People Served card, which counted WHO RAN the program
+    # instead of WHO ATTENDED.  For Fit & Fall Proof, a class with 12
+    # attendees + 3 leaders showed "3 People Served" instead of 12.
+    # This field sums the contribution's head_count (participants) so
+    # the metric matches the BPOE paper form's Column B.
+    participants = fields.Integer(
+        "Participants Served", readonly=True,
+        help="Sum of BPOE Column B (People Served / participants) "
+             "across contributions.  This is the person-facing metric — "
+             "how many people the lodge's programs actually reached.",
+    )
     elks_miles = fields.Float("Elks Miles", readonly=True)
     helper_miles = fields.Float("Helper Miles", readonly=True)
     cash_raised = fields.Monetary(
@@ -327,8 +340,12 @@ class ElksCharityDashboard(models.Model):
                 'hours': sum(rows.mapped('total_hours')),
                 'cash': sum(rows.mapped('cash_raised')),
                 'non_cash': sum(rows.mapped('non_cash_raised')),
-                'people_served': sum(rows.mapped('elks_headcount'))
-                                 + sum(rows.mapped('helper_headcount')),
+                # 19.0.7.22: use participants (contribution head_count
+                # sum) instead of elks_headcount+helper_headcount.
+                # The old formula counted WHO RAN the program instead
+                # of WHO IT SERVED — Fit & Fall Proof showed 52 (leaders)
+                # instead of 211 (seniors who attended).
+                'people_served': sum(rows.mapped('participants')),
             }
 
         totals = _aggs(lodge_year)
@@ -368,7 +385,8 @@ class ElksCharityDashboard(models.Model):
                 'hours': row.total_hours,
                 'cash': row.cash_raised,
                 'non_cash': row.non_cash_raised,
-                'people_served': row.elks_headcount + row.helper_headcount,
+                # 19.0.7.22: participants (head_count) not elks+helper counts
+                'people_served': row.participants,
                 'activity_count': row.activity_count,
                 'prior_hours': prior_hours,
                 'prior_cash': prior_cash,
@@ -820,6 +838,11 @@ class ElksCharityDashboard(models.Model):
                         COALESCE(cu.combined_helper_unique, 0),
                         COALESCE(ca.contrib_helpers, 0)
                     )                                AS helper_headcount,
+                    -- Participants (BPOE Column B) — the "People
+                    -- Served" number.  Sum of head_count on the
+                    -- contributions in this category+year.  Never
+                    -- confused with elks_count (Column C).
+                    COALESCE(ca.contrib_heads, 0)    AS participants,
                     COALESCE(la.elks_miles, 0)
                       + GREATEST(0,
                           COALESCE(ca.contrib_elks_miles, 0)

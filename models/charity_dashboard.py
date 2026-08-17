@@ -431,10 +431,11 @@ class ElksCharityDashboard(models.Model):
             base_ctx = dict(raw_ctx)
         base_ctx.update(
             current_lodge_year=_current_lodge_year(),
-            # Activate the "Current Lodge Year" named filter so only
-            # this year's cards show by default.  User can clear it
-            # from the search bar to see all years.
-            search_default_filter_current_lodge_year=1,
+            # 19.0.7.23: dropped search_default_filter_current_lodge_year=1
+            # here too.  The auto-applied filter hid all data on the
+            # dashboard because is_current_lodge_year didn't resolve
+            # correctly on first load.  Users can still apply the filter
+            # manually from the search bar if they want to narrow.
         )
         action["context"] = base_ctx
         return action

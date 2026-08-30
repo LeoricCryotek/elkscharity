@@ -12,6 +12,35 @@ class ResPartnerCharity(models.Model):
         help="Validated charity hours logged by this member.",
     )
 
+    # ─── Auto-volunteer for members (19.0.7.24) ─────────────────────
+    # When a contact is flagged as an Elk member (x_is_member=True),
+    # automatically flip x_is_volunteer=True so the elkscontacts
+    # module's _sync_volunteer_employee hook creates/links their
+    # hr.employee record.  Members can then clock in at the kiosk and
+    # log volunteer hours without a Secretary manually enrolling them
+    # via the volunteer wizard.
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            # Only auto-set if the field exists on this install (i.e.
+            # elkscontacts is present) and the record is a member.
+            if 'x_is_member' in self._fields and vals.get('x_is_member') \
+                    and 'x_is_volunteer' not in vals:
+                vals['x_is_volunteer'] = True
+        return super().create(vals_list)
+
+    def write(self, vals):
+        # Auto-set x_is_volunteer=True the moment x_is_member flips on
+        # for existing records too — a Secretary marking someone as a
+        # member later should immediately enable their volunteer clock-in.
+        if 'x_is_member' in self._fields and vals.get('x_is_member') is True \
+                and 'x_is_volunteer' not in vals:
+            for rec in self:
+                if not rec.x_is_volunteer:
+                    vals = dict(vals, x_is_volunteer=True)
+                    break
+        return super().write(vals)
+
     @api.depends('x_volunteer_employee_id')
     def _compute_charity_hours(self):
         """Charity hours for the member's personal history.

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Elks Charity — Volunteer Hours, Activities & Grand Lodge Report",
-    "version": "19.0.7.23",
+    "version": "19.0.7.24",
     "category": "Productivity",
     "summary": "Grand Lodge Charity Workbook in Odoo. Auto-generates "
                "elks.org submissions from attendance + Quick Entry, "
@@ -105,6 +105,7 @@ portal, elkscontacts, elksfrs
         "views/res_partner_charity_views.xml",
         "views/charity_contribution_views.xml",
         "views/res_users_elks_org_views.xml",
+        "views/res_company_charity_views.xml",
         "data/contribution_cron.xml",
         "wizard/yearly_wrapup_wizard_views.xml",
         "wizard/log_hours_from_event_wizard_views.xml",

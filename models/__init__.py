@@ -12,3 +12,4 @@ from . import charity_contribution
 from . import charity_dashboard
 from . import charity_leaderboard
 from . import res_users_elks_org
+from . import res_company_charity

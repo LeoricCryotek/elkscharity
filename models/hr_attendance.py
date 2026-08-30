@@ -281,8 +281,59 @@ class HrAttendance(models.Model):
             is_elk = member_status.get(emp_id, False)
             vals['x_is_helper'] = not is_elk
 
+    def _default_charity_task_from_company(self, vals_list):
+        """Apply the company's default charity task to new attendance
+        rows that don't specify one.  Runs BEFORE super().create() so
+        subsequent hooks (auto-validate, contribution-ensure) see the
+        task and process the row as charity work.
+
+        Only applied when:
+          * x_charity_task_id isn't already set in vals
+          * The employee is linked to an Elk-member contact (avoids
+            tagging non-volunteer employees' regular clock-ins as
+            charity)
+          * The company has a default configured
+
+        Fixes 19.0.7.24: volunteers clocking in at the kiosk had to
+        remember to pick a Charity Activity on every shift.  Kiosk
+        mode doesn't easily expose that field, so most rows landed
+        without one and got dropped from the GL report.  This
+        auto-tag defaults them to "Lodge Operations" (or whatever the
+        company has set).
+        """
+        company = self.env.company
+        default_task = getattr(company, 'x_default_charity_task_id', None)
+        if not default_task:
+            return
+        # Batch-lookup: which employees are volunteers?
+        emp_ids = {vals['employee_id'] for vals in vals_list
+                   if not vals.get('x_charity_task_id')
+                   and vals.get('employee_id')}
+        if not emp_ids:
+            return
+        Partner = self.env['res.partner'].sudo()
+        if 'x_volunteer_employee_id' not in Partner._fields:
+            return
+        volunteer_emp_ids = set(
+            Partner.search([
+                ('x_volunteer_employee_id', 'in', list(emp_ids)),
+                ('x_is_member', '=', True),
+            ]).mapped('x_volunteer_employee_id.id')
+        )
+        for vals in vals_list:
+            if vals.get('x_charity_task_id'):
+                continue
+            if vals.get('employee_id') in volunteer_emp_ids:
+                vals['x_charity_task_id'] = default_task.id
+
     @api.model_create_multi
     def create(self, vals_list):
+        # Default the Charity Activity to the company setting when
+        # the volunteer didn't pick one at the kiosk.  Must fire
+        # BEFORE the helper-classifier and BEFORE super().create()
+        # so the downstream _auto_validate / _ensure_attendance_contribution
+        # hooks see a properly-tagged charity row.
+        self._default_charity_task_from_company(vals_list)
         # Auto-classify Non-Elk Helper from linked contact BEFORE
         # super().create() so the stored field is correct on first
         # save (contribution totals downstream read it as-is).

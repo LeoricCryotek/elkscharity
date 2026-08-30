@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Settings entry so the Secretary can pick the default charity
+         task used for kiosk clock-ins (19.0.7.24). -->
+    <record id="view_res_config_settings_elks_charity_default_task"
+            model="ir.ui.view">
+        <field name="name">res.config.settings.elks.charity.default.task</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app string="Elks Charity" name="elkscharity"
+                     groups="elkscharity.group_elkscharity_secretary">
+                    <block title="Kiosk Clock-In Defaults"
+                           name="elkscharity_kiosk_block">
+                        <setting id="elkscharity_default_charity_task"
+                                 help="Charity Activity applied automatically to attendance rows created by volunteers who don't pick one at the kiosk.  Set to 'Lodge Operations' (GL 9999) so general volunteer hours count toward the lodge's charity report.">
+                            <field name="x_default_charity_task_id"
+                                   options="{'no_create': True}"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Bridge res.config.settings to the company field.  Uses
+         related=True so writes go straight to res.company without a
+         custom onchange. -->
+    <record id="res_config_settings_add_default_task" model="ir.ui.view">
+        <field name="name">res.config.settings.add.default.task</field>
+        <field name="model">res.config.settings</field>
+        <field name="mode">extension</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <data/>
+        </field>
+    </record>
+</odoo>

@@ -141,18 +141,69 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
             )
             if need_employee:
                 dept = need_employee[0]._get_or_create_volunteer_department()
+                # Every force-created employee reports to whoever the
+                # Volunteers department manager is (usually the
+                # Volunteer Coordinator).  Falls back to no parent if
+                # the department has no manager set — leaves the field
+                # blank rather than crashing.  19.0.7.26.
+                dept_manager_id = (dept.manager_id.id
+                                   if dept.manager_id else False)
                 Employee = self.env['hr.employee'].sudo()
+                # res.partner in Odoo 19 no longer exposes a distinct
+                # 'mobile' field on some installs (merged into phone).
+                # Use hasattr() so this survives either shape without
+                # crashing.  Prior code raised AttributeError on write.
+                # Kiosk clock-in expects a 4-digit PIN
+                # (hr.employee.pin).  Per the kiosk poster: default to
+                # the last 4 digits of the volunteer's cell phone;
+                # fallback "0000" when there's no phone on file.
+                # 19.0.7.27.
+                import re
                 for p in need_employee:
-                    emp = Employee.create({
+                    mobile = getattr(p, 'mobile', False)
+                    phone_src = p.phone or mobile or ""
+                    digits = re.sub(r'\D', '', str(phone_src))
+                    pin = digits[-4:].zfill(4) if digits else '0000'
+                    vals = {
                         'name': p.name or p.display_name or 'Volunteer',
                         'work_contact_id': p.id,
                         'work_email': p.email or False,
-                        'work_phone': p.phone or p.mobile or False,
+                        'work_phone': p.phone or mobile or False,
                         'department_id': dept.id,
                         'x_is_volunteer': True,
-                    })
+                        'pin': pin,
+                    }
+                    if dept_manager_id:
+                        vals['parent_id'] = dept_manager_id
+                        vals['coach_id'] = dept_manager_id
+                    emp = Employee.create(vals)
                     p.sudo().write({'x_volunteer_employee_id': emp.id})
                     force_created |= emp
+
+        # ---- Step 1c: backfill PINs on employees that lack one ----
+        # Kiosk requires hr.employee.pin (4 digits).  For every
+        # employee tied to one of our partners, if pin is empty, set
+        # it to last-4-of-cell (or "0000" fallback matching poster).
+        # Never overwrites an existing pin — a Secretary may have
+        # already set one manually.  19.0.7.27.
+        import re
+        pins_set = 0
+        emps_by_partner = {
+            e.work_contact_id.id: e
+            for e in self.env['hr.employee'].sudo().search([
+                ('work_contact_id', 'in', partners.ids),
+            ]) if e.work_contact_id
+        }
+        for p in partners:
+            emp = emps_by_partner.get(p.id)
+            if not emp or emp.pin:
+                continue
+            mobile = getattr(p, 'mobile', False)
+            phone_src = p.phone or mobile or ""
+            digits = re.sub(r'\D', '', str(phone_src))
+            pin = digits[-4:].zfill(4) if digits else '0000'
+            emp.sudo().write({'pin': pin})
+            pins_set += 1
 
         # ---- Step 2: set the default charity on their employees ----
         # x_default_charity_task_id lives on hr.employee. res.partner

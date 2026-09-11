@@ -106,6 +106,25 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
     # ------------------------------------------------------------------
     # Apply
     # ------------------------------------------------------------------
+    # Chunk size for commit-per-batch.  Live server has a 60s CPU
+    # limit per worker; each partner-flip + employee-sync is ~160ms,
+    # so ~350 partners is the absolute ceiling and 250 is safe.
+    # Committing every N keeps progress survivable across retries.
+    _BATCH_SIZE = 25
+
+    def _quiet_ctx(self, records):
+        """Strip mail-tracking overhead — chatter posts on every
+        employee create/write dominate the 60s CPU budget on the
+        live server.  Bulk operations don't need audit trail per row.
+        """
+        return records.with_context(
+            tracking_disable=True,
+            mail_create_nolog=True,
+            mail_create_nosubscribe=True,
+            mail_notrack=True,
+            no_reset_password=True,
+        )
+
     def action_apply(self):
         self.ensure_one()
         partners = self._get_target_partners()
@@ -116,12 +135,19 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
             ))
 
         # ---- Step 1: flip the volunteer flag on partners ----
-        # We write in one go so the elkscontacts write hook + employee
-        # sync fires cleanly for the whole batch. Partners already
-        # True are unaffected by writing True again.
-        flipped = partners.filtered(lambda p: not p.x_is_volunteer)
-        if flipped:
-            flipped.write({'x_is_volunteer': True})
+        # Process in chunks with a commit after each so a worker
+        # timeout doesn't wipe everything.  Chatter/tracking is
+        # suppressed via _quiet_ctx — the elkscontacts sync hook
+        # still fires but skips the mail.thread audit posts.
+        # 19.0.7.28.
+        flipped = self.env['res.partner']
+        pending = partners.filtered(lambda p: not p.x_is_volunteer)
+        for i in range(0, len(pending), self._BATCH_SIZE):
+            chunk = pending[i:i + self._BATCH_SIZE]
+            self._quiet_ctx(chunk).write({'x_is_volunteer': True})
+            flipped |= chunk
+            # Commit so a subsequent timeout doesn't undo this batch.
+            self.env.cr.commit()
 
         # ---- Step 1b: force-create employees for stragglers ----
         # elkscontacts._sync_volunteer_employee only LINKS when it
@@ -148,7 +174,7 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
                 # blank rather than crashing.  19.0.7.26.
                 dept_manager_id = (dept.manager_id.id
                                    if dept.manager_id else False)
-                Employee = self.env['hr.employee'].sudo()
+                Employee = self._quiet_ctx(self.env['hr.employee'].sudo())
                 # res.partner in Odoo 19 no longer exposes a distinct
                 # 'mobile' field on some installs (merged into phone).
                 # Use hasattr() so this survives either shape without
@@ -159,26 +185,33 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
                 # fallback "0000" when there's no phone on file.
                 # 19.0.7.27.
                 import re
-                for p in need_employee:
-                    mobile = getattr(p, 'mobile', False)
-                    phone_src = p.phone or mobile or ""
-                    digits = re.sub(r'\D', '', str(phone_src))
-                    pin = digits[-4:].zfill(4) if digits else '0000'
-                    vals = {
-                        'name': p.name or p.display_name or 'Volunteer',
-                        'work_contact_id': p.id,
-                        'work_email': p.email or False,
-                        'work_phone': p.phone or mobile or False,
-                        'department_id': dept.id,
-                        'x_is_volunteer': True,
-                        'pin': pin,
-                    }
-                    if dept_manager_id:
-                        vals['parent_id'] = dept_manager_id
-                        vals['coach_id'] = dept_manager_id
-                    emp = Employee.create(vals)
-                    p.sudo().write({'x_volunteer_employee_id': emp.id})
-                    force_created |= emp
+                # Commit-per-chunk here too so a timeout keeps
+                # whatever we already created.  19.0.7.28.
+                for i in range(0, len(need_employee), self._BATCH_SIZE):
+                    chunk = need_employee[i:i + self._BATCH_SIZE]
+                    for p in chunk:
+                        mobile = getattr(p, 'mobile', False)
+                        phone_src = p.phone or mobile or ""
+                        digits = re.sub(r'\D', '', str(phone_src))
+                        pin = digits[-4:].zfill(4) if digits else '0000'
+                        vals = {
+                            'name': p.name or p.display_name or 'Volunteer',
+                            'work_contact_id': p.id,
+                            'work_email': p.email or False,
+                            'work_phone': p.phone or mobile or False,
+                            'department_id': dept.id,
+                            'x_is_volunteer': True,
+                            'pin': pin,
+                        }
+                        if dept_manager_id:
+                            vals['parent_id'] = dept_manager_id
+                            vals['coach_id'] = dept_manager_id
+                        emp = Employee.create(vals)
+                        self._quiet_ctx(p).sudo().write(
+                            {'x_volunteer_employee_id': emp.id}
+                        )
+                        force_created |= emp
+                    self.env.cr.commit()
 
         # ---- Step 1c: backfill PINs on employees that lack one ----
         # Kiosk requires hr.employee.pin (4 digits).  For every

@@ -60,6 +60,18 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
              "we can set their default charity. Off: only touch "
              "members whose volunteer flag is currently OFF.",
     )
+    force_create_employee = fields.Boolean(
+        "Force-create employee if none exists",
+        default=True,
+        help="elkscontacts' auto-sync only LINKS to existing "
+             "employees when it finds a high-confidence match "
+             "(exact email or existing work_contact link). It never "
+             "creates new employees blindly. Turn this ON to make "
+             "the wizard create a fresh employee record for every "
+             "volunteer that still has none after the sync fires "
+             "— tagged 'Volunteers' department and linked via "
+             "work_contact_id so future syncs recognize the pairing.",
+    )
 
     partner_count = fields.Integer(
         "Partners in scope", compute="_compute_partner_count",
@@ -111,6 +123,37 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
         if flipped:
             flipped.write({'x_is_volunteer': True})
 
+        # ---- Step 1b: force-create employees for stragglers ----
+        # elkscontacts._sync_volunteer_employee only LINKS when it
+        # finds a high-confidence match (exact email / work_contact).
+        # For members without an email on file (or with mismatched
+        # data) the sync silently skips creation and posts a chatter
+        # note.  When force_create_employee is on, we finish the job:
+        # create a fresh hr.employee for every partner still without
+        # x_volunteer_employee_id, tagged Volunteers department and
+        # work_contact_id linked so future syncs recognize the pair.
+        force_created = self.env['hr.employee']
+        if self.force_create_employee:
+            # Refresh the recordset so post-sync state is visible.
+            partners.invalidate_recordset(['x_volunteer_employee_id'])
+            need_employee = partners.filtered(
+                lambda p: not p.x_volunteer_employee_id
+            )
+            if need_employee:
+                dept = need_employee[0]._get_or_create_volunteer_department()
+                Employee = self.env['hr.employee'].sudo()
+                for p in need_employee:
+                    emp = Employee.create({
+                        'name': p.name or p.display_name or 'Volunteer',
+                        'work_contact_id': p.id,
+                        'work_email': p.email or False,
+                        'work_phone': p.phone or p.mobile or False,
+                        'department_id': dept.id,
+                        'x_is_volunteer': True,
+                    })
+                    p.sudo().write({'x_volunteer_employee_id': emp.id})
+                    force_created |= emp
+
         # ---- Step 2: set the default charity on their employees ----
         # x_default_charity_task_id lives on hr.employee. res.partner
         # → hr.employee is linked via work_contact_id. After the flip
@@ -138,6 +181,11 @@ class ElksBulkEnableVolunteerWizard(models.TransientModel):
         msg_lines = [
             _("Volunteer flag set on %s partner(s).") % len(flipped),
         ]
+        if self.force_create_employee and force_created:
+            msg_lines.append(_(
+                "Created %s new employee record(s) for volunteers "
+                "without a prior match."
+            ) % len(force_created))
         if default_id:
             msg_lines.append(_(
                 "Default charity activity set on %s employee(s)."

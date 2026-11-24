@@ -22,6 +22,7 @@ import logging
 from odoo import _, fields, http
 from odoo.exceptions import AccessError, MissingError
 from odoo.http import request
+from odoo.osv import expression
 from odoo.addons.portal.controllers.portal import CustomerPortal
 
 _logger = logging.getLogger(__name__)
@@ -65,6 +66,73 @@ class ElksCharityPortal(CustomerPortal):
                 .search_count([("submitted_by", "=", request.env.user.id)])
             )
         return values
+
+    # ─────────────────────────────────────────────────────────────
+    # Who the hours count towards
+    # ─────────────────────────────────────────────────────────────
+    def _credit_candidate_domain(self):
+        """Who may be named as the member getting the credit.
+
+        Deliberately NOT restricted to internal users. A lodge member is a
+        PORTAL user, and they are exactly who the Secretary needs to credit
+        when hours come in by phone — filtering to share=False would leave
+        only staff and officers on the list, which is the opposite of useful.
+
+        Excluded: the public (not-logged-in) user and OdooBot, neither of
+        which is a person who can volunteer.
+        """
+        excluded = []
+        for xmlid in ("base.public_user", "base.user_root"):
+            rec = request.env.ref(xmlid, raise_if_not_found=False)
+            if rec:
+                excluded.append(rec.id)
+        domain = [("active", "=", True)]
+        if excluded:
+            domain.append(("id", "not in", excluded))
+        return domain
+
+    def _credit_user_values(self):
+        """Default the credited member to whoever is logged in.
+
+        A portal member filing their own hours is the normal case, so the
+        field defaults to them and is shown read-only — letting any portal
+        user post hours onto another member's record would be an integrity
+        hole, since these figures reach the Grand Lodge report and a member's
+        personal history.
+
+        Internal users (the Secretary taking hours over the phone) may pick
+        somebody else. The field is SHOWN either way: previously nobody was
+        told whose record the hours landed on.
+        """
+        user = request.env.user
+        can_reassign = user.has_group("base.group_user")
+        candidates = request.env["res.users"].sudo().browse()
+        if can_reassign:
+            candidates = request.env["res.users"].sudo().search(
+                self._credit_candidate_domain(), order="name") | user
+        return {
+            "credit_user": user,
+            "can_reassign": can_reassign,
+            "credit_candidates": candidates,
+        }
+
+    def _resolve_credit_user(self, post):
+        """The member these hours are credited to, for this submission.
+
+        Falls back to the logged-in user whenever the posted value is absent,
+        unparseable, or not allowed — a tampered form field must never move
+        somebody else's credit.
+        """
+        user = request.env.user
+        if not user.has_group("base.group_user"):
+            return user
+        wanted = _safe_int(post.get("credit_user_id"))
+        if not wanted or wanted == user.id:
+            return user
+        other = request.env["res.users"].sudo().search(
+            expression.AND([self._credit_candidate_domain(),
+                            [("id", "=", wanted)]]), limit=1)
+        return other or user
 
     # ─────────────────────────────────────────────────────────────
     # List of this user's submissions
@@ -121,6 +189,7 @@ class ElksCharityPortal(CustomerPortal):
             "errors": {},
             "form": {},
         })
+        values.update(self._credit_user_values())
         return request.render(
             "elkscharity.portal_my_charity_form", values
         )
@@ -170,6 +239,7 @@ class ElksCharityPortal(CustomerPortal):
                 "errors": errors,
                 "form": post,
             })
+            values.update(self._credit_user_values())
             return request.render(
                 "elkscharity.portal_my_charity_form", values
             )
@@ -198,6 +268,7 @@ class ElksCharityPortal(CustomerPortal):
                 "errors": errors,
                 "form": post,
             })
+            values.update(self._credit_user_values())
             return request.render(
                 "elkscharity.portal_my_charity_form", values
             )
@@ -243,10 +314,12 @@ class ElksCharityPortal(CustomerPortal):
             "submitted_by": request.env.user.id,
         })
 
-        # If the submitter's partner has a linked employee, give them
-        # personal credit for their share of the hours (Elks only —
-        # portal members are usually Elks, not Helpers).
-        partner = request.env.user.partner_id
+        # Personal credit goes to the member named on the form, which defaults
+        # to whoever is logged in. Previously it always followed the submitter
+        # with no way to see or change that, so a Secretary taking hours over
+        # the phone credited herself.
+        credit_user = self._resolve_credit_user(post)
+        partner = credit_user.partner_id
         employee_id = partner.x_volunteer_employee_id.id if hasattr(
             partner, "x_volunteer_employee_id"
         ) and partner.x_volunteer_employee_id else False
@@ -270,12 +343,14 @@ class ElksCharityPortal(CustomerPortal):
         task.message_post(
             body=_(
                 "<strong>Portal submission</strong> by "
-                "%(user)s — pending Secretary review.<br/>"
+                "%(user)s, credited to %(credit)s — pending "
+                "Secretary review.<br/>"
                 "%(prog)s — %(date)s · %(elks)s Elks / %(helpers)s "
                 "Helpers · %(hrs)s hrs · $%(cash)s cash / $%(nc)s "
                 "in-kind"
             ) % {
                 "user": request.env.user.name,
+                "credit": credit_user.name,
                 "prog": program_name,
                 "date": event_date,
                 "elks": _safe_int(post.get("elks_count")),

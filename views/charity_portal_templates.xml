@@ -2,19 +2,32 @@
 <odoo>
 
     <!-- ════════════════════════════════════════════════════════════════
-         /my home page — add a "Charity Entries" tile next to the
+         /my home page — add a "Submit Volunteer Form" tile next to the
          standard portal tiles (Invoices, Quotations, etc.).
+
+         config_card is NOT optional here.  Odoo 19's portal_docs_entry
+         stamps d-none on a card unless force_show (which needs a NON-ZERO
+         counter) or config_card is set.  charity_count is the member's own
+         past submissions, so without config_card the tile is invisible to
+         every member who has not submitted before — precisely the member who
+         needs to find the form.  Core uses the same flag for the cards that
+         must always appear (Addresses, Connection & Security).
+
+         placeholder_count stays alongside it: config_card makes the card
+         render, placeholder_count still drives the count badge for members
+         who do have history.  They are not alternatives.
          ════════════════════════════════════════════════════════════════ -->
     <template id="portal_my_home_charity"
-              name="Portal My Home : Charity Entries"
+              name="Portal My Home : Submit Volunteer Form"
               inherit_id="portal.portal_my_home"
               priority="40">
         <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
             <t t-call="portal.portal_docs_entry">
-                <t t-set="title">Charity Entries</t>
-                <t t-set="text">My Data Collection Survey submissions</t>
+                <t t-set="title">Submit Volunteer Form</t>
+                <t t-set="text">Log volunteer hours for a programme you helped with</t>
                 <t t-set="url" t-value="'/my/charity'"/>
                 <t t-set="placeholder_count" t-value="'charity_count'"/>
+                <t t-set="config_card" t-value="True"/>
             </t>
         </xpath>
     </template>
@@ -150,6 +163,50 @@
                                      t-if="errors.get('event_date')">
                                     <t t-esc="errors.get('event_date')"/>
                                 </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Who the hours count towards -->
+                    <fieldset class="mb-4">
+                        <legend class="h5 border-bottom pb-2">
+                            Credit for these hours
+                        </legend>
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label class="form-label">
+                                    Hours credited to
+                                </label>
+                                <!-- Shown even when it cannot be changed. The
+                                     member was previously never told whose
+                                     record these hours land on, which is the
+                                     one thing they most want to be sure of. -->
+                                <t t-if="can_reassign">
+                                    <select class="form-select"
+                                            name="credit_user_id">
+                                        <t t-foreach="credit_candidates"
+                                           t-as="cand">
+                                            <option t-att-value="cand.id"
+                                                    t-att-selected="cand.id == credit_user.id">
+                                                <t t-esc="cand.name"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                    <div class="form-text">
+                                        Filing on behalf of somebody who
+                                        phoned their hours in? Pick them here.
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <input type="text" class="form-control"
+                                           t-att-value="credit_user.name"
+                                           readonly="readonly"/>
+                                    <div class="form-text">
+                                        Personal credit goes to your own member
+                                        record. Ask the Secretary if these hours
+                                        belong to somebody else.
+                                    </div>
+                                </t>
                             </div>
                         </div>
                     </fieldset>
